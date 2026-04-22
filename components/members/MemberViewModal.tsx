@@ -3,7 +3,9 @@
 import { X } from "lucide-react";
 import type { UserRecord, UserRole } from "@/types";
 import { fmt } from "@/lib/utils";
+import { useUserMetrics } from "@/lib/metrics";
 import { MemberDashboardTabs } from "./MemberDashboardTabs";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface Props {
   target: UserRecord | null;
@@ -23,6 +25,7 @@ const roleColor: Record<UserRole, string> = {
 };
 
 export function MemberViewModal({ target, viewerRole, onClose }: Props) {
+  const metrics = useUserMetrics(target?.id);
   if (!target) return null;
 
   const viewerAccent = viewerRole === "admin" ? "#FF6B6B" : "#FFB830";
@@ -30,6 +33,7 @@ export function MemberViewModal({ target, viewerRole, onClose }: Props) {
     viewerRole === "admin" ? "rgba(255,107,107,0.12)" : "rgba(255,184,48,0.12)";
 
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -73,11 +77,12 @@ export function MemberViewModal({ target, viewerRole, onClose }: Props) {
               <div className="mt-0.5 text-[11px] text-white/40">
                 {target.dept}
                 {target.title && ` · ${target.title}`}
-                {target.achievement !== null && ` · 達成率 ${target.achievement}%`}
-                {target.customers !== null && ` · 担当 ${target.customers}社`}
-                {target.monthRevenue != null &&
-                  target.monthRevenue > 0 &&
-                  ` · 今月 ${fmt(target.monthRevenue)}`}
+                {metrics.monthAchievement !== null &&
+                  ` · 今月達成率 ${metrics.monthAchievement}%`}
+                {metrics.customerCount > 0 &&
+                  ` · 担当 ${metrics.customerCount}社`}
+                {metrics.monthRevenue > 0 &&
+                  ` · 今月 ${fmt(metrics.monthRevenue)}`}
               </div>
             </div>
           </div>
@@ -100,5 +105,6 @@ export function MemberViewModal({ target, viewerRole, onClose }: Props) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

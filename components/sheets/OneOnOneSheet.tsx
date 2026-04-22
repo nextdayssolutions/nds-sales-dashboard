@@ -6,11 +6,11 @@ import { toast } from "sonner";
 import type { OneOnOneEntry, OneOnOneSheet } from "@/types";
 import { useSheet } from "@/lib/sheet-storage";
 import { SHEET_META } from "@/lib/curriculum-data";
-import { useMockSession } from "@/lib/session";
+import { useAuthedUser } from "@/lib/session";
 import { Field, ReadOnlyBanner } from "./primitives";
 
 interface Props {
-  userId: number;
+  userId: string;
   /** owner 以外（manager/admin）が開いたとき true — 本人入力欄は readonly、managerCommentのみ編集可 */
   readonly?: boolean;
   /** readonly=true でも managerComment 編集を許可するか（manager/admin trainerMode） */
@@ -29,7 +29,7 @@ export function OneOnOneSheetPanel({ userId, readonly, commenterMode }: Props) {
   const [stored, save] = useSheet(userId, "oneonone");
   const [draft, setDraft] = useState<OneOnOneSheet>(stored);
   const [openId, setOpenId] = useState<string | null>(null);
-  const { session } = useMockSession();
+  const { session } = useAuthedUser();
   const meta = SHEET_META.oneonone;
   const accent = "rgba(183,148,244,0.2)";
 
@@ -45,9 +45,13 @@ export function OneOnOneSheetPanel({ userId, readonly, commenterMode }: Props) {
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(stored);
 
-  const handleSave = () => {
-    save(draft);
-    toast.success("1on1シートを保存しました");
+  const handleSave = async () => {
+    try {
+      await save(draft);
+      toast.success("1on1シートを保存しました");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
+    }
   };
 
   const canAddEntry = !readonly;

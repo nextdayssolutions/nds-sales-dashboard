@@ -9,7 +9,7 @@ import { CAREER_STAGES, SHEET_META, WISH_PERIODS } from "@/lib/curriculum-data";
 import { Field, ReadOnlyBanner } from "./primitives";
 
 interface Props {
-  userId: number;
+  userId: string;
   readonly?: boolean;
 }
 
@@ -23,9 +23,13 @@ export function GoalSheetPanel({ userId, readonly }: Props) {
     setDraft(stored);
   }, [stored]);
 
-  const handleSave = () => {
-    save(draft);
-    toast.success("目標設定を保存しました");
+  const handleSave = async () => {
+    try {
+      await save(draft);
+      toast.success("目標設定を保存しました");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
+    }
   };
 
   const updateWish = (period: WishPeriod, patch: Partial<{ content: string; url: string }>) =>

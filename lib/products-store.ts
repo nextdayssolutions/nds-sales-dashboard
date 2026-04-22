@@ -1,88 +1,184 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+export type CommissionType = "rate" | "fixed";
 
 export interface Product {
   id: string;
   name: string;
   category?: string;
   unitPrice?: number;
+  /** 歩合タイプ: "rate" (売上%) or "fixed" (1件あたり固定円) */
+  commissionType: CommissionType;
+  /** 歩合率 (%). commissionType=rate のとき使用。0〜100 の小数 */
+  commissionRate: number;
+  /** 定額歩合 (円/件). commissionType=fixed のとき使用 */
+  commissionFixed: number;
   isActive: boolean;
 }
 
-const KEY = "products-v1";
-const SEED_FLAG = "products-seed-v1";
+type DbCategory = "stock" | "shot" | "both" | "other";
 
-const DEFAULT_PRODUCTS: Product[] = [
-  { id: "p-sfa", name: "N-Free", category: "ストック", unitPrice: 50000, isActive: true },
-  { id: "p-erp", name: "DX研修", category: "ストック", unitPrice: 100000, isActive: true },
-  { id: "p-ma", name: "はたらくAI", category: "ストック", unitPrice: 30000, isActive: true },
-  { id: "p-pos", name: "claudeファイル", category: "ストック", unitPrice: 40000, isActive: true },
-  { id: "p-crm", name: "トリドリ", category: "ストック", unitPrice: 20000, isActive: true },
-];
+const CATEGORY_TO_DB: Record<string, DbCategory | null> = {
+  ストック: "stock",
+  ショット: "shot",
+  両方: "both",
+  その他: "other",
+};
 
-function readAll(): Product[] {
-  if (typeof window === "undefined") return DEFAULT_PRODUCTS;
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Product[]) : DEFAULT_PRODUCTS;
-  } catch {
-    return DEFAULT_PRODUCTS;
+const CATEGORY_FROM_DB: Record<DbCategory, string> = {
+  stock: "ストック",
+  shot: "ショット",
+  both: "両方",
+  other: "その他",
+};
+
+interface ProductRow {
+  id: string;
+  name: string;
+  category: DbCategory | null;
+  unit_price: number | null;
+  commission_type: CommissionType;
+  commission_rate: number;
+  commission_fixed: number;
+  is_active: boolean;
+}
+
+function rowToProduct(row: ProductRow): Product {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category ? CATEGORY_FROM_DB[row.category] : undefined,
+    unitPrice: row.unit_price ?? undefined,
+    commissionType: row.commission_type ?? "rate",
+    commissionRate: Number(row.commission_rate) || 0,
+    commissionFixed: row.commission_fixed || 0,
+    isActive: row.is_active,
+  };
+}
+
+/** 商材の歩合定義から、売上 1 件分の歩合額を算出 */
+export function computeCommission(product: Product | undefined, saleAmount: number): number {
+  if (!product) return 0;
+  if (product.commissionType === "fixed") {
+    return product.commissionFixed;
+  }
+  return Math.round((saleAmount * product.commissionRate) / 100);
+}
+
+const EVENT = "products-updated";
+
+function emitUpdate() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(EVENT));
   }
 }
 
-function writeAll(list: Product[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(list));
-  window.dispatchEvent(new CustomEvent("products-updated"));
-}
-
-export function seedProductsIfEmpty() {
-  if (typeof window === "undefined") return;
-  if (localStorage.getItem(SEED_FLAG)) return;
-  writeAll(DEFAULT_PRODUCTS);
-  localStorage.setItem(SEED_FLAG, "1");
+async function fetchAll(): Promise<Product[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      "id, name, category, unit_price, commission_type, commission_rate, commission_fixed, is_active",
+    )
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("products fetch failed", error);
+    return [];
+  }
+  return (data ?? []).map((r) => rowToProduct(r as ProductRow));
 }
 
 export function useProducts(activeOnly = true) {
   const [all, setAll] = useState<Product[]>([]);
 
   useEffect(() => {
-    setAll(readAll());
-    const handler = () => setAll(readAll());
-    window.addEventListener("products-updated", handler);
-    return () => window.removeEventListener("products-updated", handler);
+    let cancelled = false;
+    const load = async () => {
+      const data = await fetchAll();
+      if (!cancelled) setAll(data);
+    };
+    load();
+    const handler = () => load();
+    window.addEventListener(EVENT, handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(EVENT, handler);
+    };
   }, []);
 
-  const products = activeOnly ? all.filter((p) => p.isActive) : all;
+  const products = useMemo(
+    () => (activeOnly ? all.filter((p) => p.isActive) : all),
+    [all, activeOnly],
+  );
 
   const addProduct = useCallback(
-    (name: string, category?: string, unitPrice?: number) => {
-      const id = `p-${Date.now()}`;
-      const next = [...all, { id, name, category, unitPrice, isActive: true }];
-      writeAll(next);
-      setAll(next);
+    async (input: {
+      name: string;
+      category?: string;
+      unitPrice?: number;
+      commissionType?: CommissionType;
+      commissionRate?: number;
+      commissionFixed?: number;
+    }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("products").insert({
+        name: input.name,
+        category: input.category ? CATEGORY_TO_DB[input.category] ?? null : null,
+        unit_price: input.unitPrice ?? null,
+        commission_type: input.commissionType ?? "rate",
+        commission_rate: input.commissionRate ?? 0,
+        commission_fixed: input.commissionFixed ?? 0,
+        is_active: true,
+      });
+      if (error) {
+        console.error("product insert failed", error);
+        throw error;
+      }
+      emitUpdate();
     },
-    [all]
+    [],
   );
 
   const updateProduct = useCallback(
-    (id: string, patch: Partial<Product>) => {
-      const next = all.map((p) => (p.id === id ? { ...p, ...patch } : p));
-      writeAll(next);
-      setAll(next);
+    async (id: string, patch: Partial<Product>) => {
+      const supabase = createClient();
+      const payload: Record<string, unknown> = {};
+      if (patch.name !== undefined) payload.name = patch.name;
+      if (patch.category !== undefined) {
+        payload.category = patch.category
+          ? CATEGORY_TO_DB[patch.category] ?? null
+          : null;
+      }
+      if (patch.unitPrice !== undefined) payload.unit_price = patch.unitPrice ?? null;
+      if (patch.commissionType !== undefined)
+        payload.commission_type = patch.commissionType;
+      if (patch.commissionRate !== undefined)
+        payload.commission_rate = patch.commissionRate;
+      if (patch.commissionFixed !== undefined)
+        payload.commission_fixed = patch.commissionFixed;
+      if (patch.isActive !== undefined) payload.is_active = patch.isActive;
+      const { error } = await supabase.from("products").update(payload).eq("id", id);
+      if (error) {
+        console.error("product update failed", error);
+        throw error;
+      }
+      emitUpdate();
     },
-    [all]
+    [],
   );
 
-  const deleteProduct = useCallback(
-    (id: string) => {
-      const next = all.filter((p) => p.id !== id);
-      writeAll(next);
-      setAll(next);
-    },
-    [all]
-  );
+  const deleteProduct = useCallback(async (id: string) => {
+    const supabase = createClient();
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) {
+      console.error("product delete failed", error);
+      throw error;
+    }
+    emitUpdate();
+  }, []);
 
   return { products, allProducts: all, addProduct, updateProduct, deleteProduct };
 }

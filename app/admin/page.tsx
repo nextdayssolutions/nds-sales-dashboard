@@ -8,9 +8,11 @@ import { RoleGuard } from "@/components/layout/RoleGuard";
 import { UserTable } from "@/components/admin/UserTable";
 import { InviteModal } from "@/components/admin/InviteModal";
 import { ProductsTable } from "@/components/admin/ProductsTable";
-import { MOCK_USERS } from "@/lib/mock-data";
-import { useMockSession } from "@/lib/session";
+import { useAllUsers } from "@/lib/user-store";
+import { useAuthedUser } from "@/lib/session";
+import { useAggregatedMetrics, CURRENT_YEAR } from "@/lib/metrics";
 import { fmt } from "@/lib/utils";
+import { useMemo } from "react";
 
 type TabId = "users" | "products" | "analytics" | "audit";
 
@@ -32,21 +34,20 @@ export default function AdminPage() {
 function AdminBody() {
   const [tab, setTab] = useState<TabId>("users");
   const [showInvite, setShowInvite] = useState(false);
-  const { session, user } = useMockSession();
-  if (!session || !user) return null;
+  const { session, user } = useAuthedUser();
+  const { users: allUsers } = useAllUsers();
 
-  const withAch = MOCK_USERS.filter((u) => u.achievement !== null);
-  const stats = {
-    total: MOCK_USERS.length,
-    totalMonthRevenue: MOCK_USERS.reduce((s, u) => s + (u.monthRevenue ?? 0), 0),
-    totalCustomers: MOCK_USERS.reduce((s, u) => s + (u.customers ?? 0), 0),
-    avgAchievement:
-      withAch.length > 0
-        ? Math.round(
-            withAch.reduce((s, u) => s + (u.achievement ?? 0), 0) / withAch.length
-          )
-        : 0,
-  };
+  // 集計対象は admin を除くアクティブ / 招待済みユーザー（代表個人の数値は除外）
+  const targetUserIds = useMemo(
+    () =>
+      allUsers
+        .filter((u) => u.role !== "admin" && u.status !== "retired")
+        .map((u) => u.id),
+    [allUsers],
+  );
+  const agg = useAggregatedMetrics(targetUserIds);
+
+  if (!session || !user) return null;
 
   return (
     <AppShell variant="admin" maxWidth="wide">
@@ -78,15 +79,43 @@ function AdminBody() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3.5 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3.5 md:grid-cols-5">
         {[
-          { label: "総従業員数", value: stats.total, sub: "全ロール合計", color: "#00D4FF" },
-          { label: "合計月商", value: fmt(stats.totalMonthRevenue), sub: "全社今月売上", color: "#00E5A0" },
-          { label: "合計担当顧客", value: `${stats.totalCustomers}社`, sub: "全社合算", color: "#FFB830" },
           {
-            label: "平均達成率",
-            value: `${stats.avgAchievement}%`,
-            sub: "今月目標比",
+            label: "総従業員数",
+            value: allUsers.length,
+            sub: "全ロール合計",
+            color: "#00D4FF",
+          },
+          {
+            label: "合計今月売上",
+            value: fmt(agg.totalMonthRevenue),
+            sub: `目標 ${fmt(agg.totalMonthTarget)}`,
+            color: "#00D4FF",
+          },
+          {
+            label: "合計今月歩合",
+            value:
+              agg.totalMonthCommission > 0 ? fmt(agg.totalMonthCommission) : "—",
+            sub:
+              agg.totalYearCommission > 0
+                ? `${CURRENT_YEAR}年 累計 ${fmt(agg.totalYearCommission)}`
+                : "従業員へのバック合計",
+            color: "#00E5A0",
+          },
+          {
+            label: "合計担当顧客",
+            value: `${agg.totalCustomers}社`,
+            sub: "全社合算",
+            color: "#FFB830",
+          },
+          {
+            label: "平均今月達成率",
+            value:
+              agg.avgMonthAchievement !== null
+                ? `${agg.avgMonthAchievement}%`
+                : "—",
+            sub: "今月目標比（目標設定者のみ）",
             color: "#B794F4",
           },
         ].map((k) => (

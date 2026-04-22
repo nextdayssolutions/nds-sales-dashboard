@@ -3,16 +3,17 @@
 import { Fragment, useMemo, useState } from "react";
 import { Plus, Target, Zap, Package, Pencil, X } from "lucide-react";
 import type { RevenueType, SalesRecord } from "@/types";
-import { MOCK_USERS } from "@/lib/mock-data";
+import { useUser } from "@/lib/user-store";
 import { useSalesRecords, useRevenueTargets } from "@/lib/sales-store";
 import { useCustomers } from "@/lib/customer-store";
 import { useProducts } from "@/lib/products-store";
+import { CURRENT_YEAR } from "@/lib/metrics";
 import { fmt, fmtFull } from "@/lib/utils";
 import { SalesRecordFormModal } from "./SalesRecordFormModal";
 import { TargetEditModal } from "./TargetEditModal";
 
 interface Props {
-  userId: number;
+  userId: string;
   readonly?: boolean;
 }
 
@@ -37,7 +38,6 @@ const TYPE_META: Record<
   shot: { label: "ショット", color: "#FFB830", icon: Package },
 };
 
-const YEAR = 2026;
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 interface CellKey {
@@ -47,18 +47,28 @@ interface CellKey {
 }
 
 export function RevenuePanel({ userId, readonly }: Props) {
-  const user = MOCK_USERS.find((u) => u.id === userId);
-  const { records } = useSalesRecords(userId, YEAR);
-  const { targets } = useRevenueTargets(userId, YEAR);
+  const user = useUser(userId);
+  const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
+  // 年全体の過去履歴（年セレクタの選択肢を作るため）。user のすべての売上を 1 度取得
+  const { records: allRecords } = useSalesRecords(userId);
+  const { records } = useSalesRecords(userId, selectedYear);
+  const { targets } = useRevenueTargets(userId, selectedYear);
   const { customers } = useCustomers(userId);
   const { products } = useProducts();
   const productNames = products.map((p) => p.name);
+
+  const availableYears = useMemo(() => {
+    const set = new Set<number>([CURRENT_YEAR]);
+    for (const r of allRecords) set.add(r.year);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [allRecords]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SalesRecord | null>(null);
   const [prefill, setPrefill] = useState<Partial<CellKey> | undefined>(undefined);
   const [targetOpen, setTargetOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<CellKey | null>(null);
+  const isCurrentYear = selectedYear === CURRENT_YEAR;
 
   const aggregates = useMemo(() => {
     // 登録済商材 + レコードに出現する過去商材（削除された商材も表示するため）
@@ -105,8 +115,35 @@ export function RevenuePanel({ userId, readonly }: Props) {
         shotYear += sh;
       }
     }
-    return { byCell, monthTotals, productTotals, yearTotal, stockYear, shotYear, allNames };
-  }, [records, productNames]);
+
+    // 商材ごとに表示する区分を決定。
+    // 商材マスタに category があればそれに従う（例: ストック → stock のみ）。
+    // ただし過去レコードが反対区分に存在するときはそのデータを隠さないよう両方表示する。
+    const typesByProduct: Record<string, RevenueType[]> = {};
+    for (const p of allNames) {
+      const product = products.find((prod) => prod.name === p);
+      const hasStock = productTotals[p].stock > 0;
+      const hasShot = productTotals[p].shot > 0;
+      if (product?.category === "ストック" && !hasShot) {
+        typesByProduct[p] = ["stock"];
+      } else if (product?.category === "ショット" && !hasStock) {
+        typesByProduct[p] = ["shot"];
+      } else {
+        typesByProduct[p] = ["stock", "shot"];
+      }
+    }
+
+    return {
+      byCell,
+      monthTotals,
+      productTotals,
+      typesByProduct,
+      yearTotal,
+      stockYear,
+      shotYear,
+      allNames,
+    };
+  }, [records, productNames, products]);
 
   const yearTarget = Object.values(targets.monthly).reduce((a, b) => a + b, 0);
   const achievement =
@@ -115,6 +152,15 @@ export function RevenuePanel({ userId, readonly }: Props) {
   const currentMonth = new Date().getMonth() + 1;
   const remainingMonths = Math.max(1, 12 - currentMonth + 1);
   const pace = Math.round(remaining / remainingMonths);
+
+  // 歩合合計（月次・年次）— スナップショット値を合算
+  const monthCommission = records
+    .filter((r) => r.month === currentMonth)
+    .reduce((s, r) => s + (r.commissionAmount ?? 0), 0);
+  const yearCommission = records.reduce(
+    (s, r) => s + (r.commissionAmount ?? 0),
+    0,
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -154,7 +200,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
       )
     : [];
 
-  const customerName = (id?: number) =>
+  const customerName = (id?: string) =>
     id ? customers.find((c) => c.id === id)?.name ?? "—" : "—";
 
   return (
@@ -170,7 +216,12 @@ export function RevenuePanel({ userId, readonly }: Props) {
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-cyan/70">
-              Sales Management · {YEAR}
+              Sales Management · {selectedYear}
+              {!isCurrentYear && (
+                <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/60">
+                  過去年閲覧中
+                </span>
+              )}
             </div>
             <div className="text-[18px] font-bold text-white">
               {user?.name ?? "—"} の売上
@@ -179,27 +230,43 @@ export function RevenuePanel({ userId, readonly }: Props) {
               商材 × 月 のマトリクスで管理（ストック / ショット）
             </div>
           </div>
-          {!readonly && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTargetOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl border border-amber/30 bg-amber/10 px-3.5 py-2 text-[12px] font-bold text-amber hover:bg-amber/15"
+          <div className="flex gap-2">
+            {availableYears.length > 1 && (
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-white outline-none focus:border-cyan/40"
+                title="年を切り替えて過去実績を閲覧"
               >
-                <Target size={13} />
-                目標を編集
-              </button>
-              <button
-                onClick={openNew}
-                className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_4px_16px_rgba(0,212,255,0.3)]"
-                style={{
-                  background: "linear-gradient(135deg, #00D4FF 0%, #7B5EA7 100%)",
-                }}
-              >
-                <Plus size={13} />
-                売上を記録
-              </button>
-            </div>
-          )}
+                {availableYears.map((y) => (
+                  <option key={y} value={y} className="bg-bg-panel">
+                    {y}年
+                  </option>
+                ))}
+              </select>
+            )}
+            {!readonly && isCurrentYear && (
+              <>
+                <button
+                  onClick={() => setTargetOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-amber/30 bg-amber/10 px-3.5 py-2 text-[12px] font-bold text-amber hover:bg-amber/15"
+                >
+                  <Target size={13} />
+                  目標を編集
+                </button>
+                <button
+                  onClick={openNew}
+                  className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-bold text-white shadow-[0_4px_16px_rgba(0,212,255,0.3)]"
+                  style={{
+                    background: "linear-gradient(135deg, #00D4FF 0%, #7B5EA7 100%)",
+                  }}
+                >
+                  <Plus size={13} />
+                  売上を記録
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -215,7 +282,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
               color: "#00D4FF",
             },
             {
-              label: "達成率",
+              label: "年間達成率",
               value: yearTarget > 0 ? `${achievement.toFixed(1)}%` : "—",
               color:
                 achievement >= 100
@@ -248,6 +315,46 @@ export function RevenuePanel({ userId, readonly }: Props) {
           ))}
         </div>
       </div>
+
+      {/* ── 歩合（コミッション）サマリー ──────────────── */}
+      {(monthCommission > 0 || yearCommission > 0) && (
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div
+            className="rounded-xl border p-3.5"
+            style={{
+              background: "rgba(0,229,160,0.06)",
+              borderColor: "rgba(0,229,160,0.25)",
+            }}
+          >
+            <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-mint/90">
+              💰 {isCurrentYear ? "今月の歩合" : `${selectedYear}年 ${currentMonth}月の歩合`}
+            </div>
+            <div className="text-[18px] font-extrabold text-mint">
+              {fmtFull(monthCommission)}
+            </div>
+            <div className="mt-0.5 text-[10px] text-white/40">
+              商材の歩合率 × 売上から自動計算
+            </div>
+          </div>
+          <div
+            className="rounded-xl border p-3.5"
+            style={{
+              background: "rgba(0,229,160,0.04)",
+              borderColor: "rgba(0,229,160,0.18)",
+            }}
+          >
+            <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-mint/80">
+              {selectedYear}年 累計歩合
+            </div>
+            <div className="text-[18px] font-extrabold text-mint">
+              {fmtFull(yearCommission)}
+            </div>
+            <div className="mt-0.5 text-[10px] text-white/40">
+              1月〜12月までの合算
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── ストック vs ショット ──────────────────── */}
       {aggregates.yearTotal > 0 && (
@@ -295,9 +402,10 @@ export function RevenuePanel({ userId, readonly }: Props) {
             {aggregates.allNames.map((p, i) => {
               const pColor = productColor(i);
               const pTotal = aggregates.productTotals[p];
+              const typesToShow = aggregates.typesByProduct[p];
               return (
                 <Fragment key={p}>
-                  {(["stock", "shot"] as RevenueType[]).map((type, idx) => {
+                  {typesToShow.map((type, idx) => {
                     const typeMeta = TYPE_META[type];
                     const Icon = typeMeta.icon;
                     const yearSub =
@@ -311,7 +419,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
                       >
                         {idx === 0 && (
                           <td
-                            rowSpan={2}
+                            rowSpan={typesToShow.length}
                             className="sticky left-0 z-[1] border-r border-white/7 bg-bg-panel/70 px-3 py-2 align-middle"
                           >
                             <div className="flex items-center gap-2">
@@ -565,7 +673,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
       <SalesRecordFormModal
         open={formOpen}
         ownerId={userId}
-        year={YEAR}
+        year={selectedYear}
         editing={editing}
         prefill={prefill}
         onClose={() => setFormOpen(false)}
@@ -573,7 +681,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
       <TargetEditModal
         open={targetOpen}
         ownerId={userId}
-        year={YEAR}
+        year={selectedYear}
         onClose={() => setTargetOpen(false)}
       />
     </div>

@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, Package, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useProducts } from "@/lib/products-store";
-import type { Product } from "@/lib/products-store";
+import type { Product, CommissionType } from "@/lib/products-store";
 import { fmtFull } from "@/lib/utils";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 export function ProductsTable() {
   const { allProducts, addProduct, updateProduct, deleteProduct } = useProducts(false);
@@ -84,6 +85,7 @@ export function ProductsTable() {
                 <th className="px-3 pb-2">商材名</th>
                 <th className="px-3 pb-2">区分</th>
                 <th className="px-3 pb-2">標準単価</th>
+                <th className="px-3 pb-2">歩合率</th>
                 <th className="px-3 pb-2">状態</th>
                 <th className="px-3 pb-2"></th>
               </tr>
@@ -101,6 +103,22 @@ export function ProductsTable() {
                   </td>
                   <td className="px-3 py-3 text-xs text-white/60">
                     {p.unitPrice ? fmtFull(p.unitPrice) : "—"}
+                  </td>
+                  <td className="px-3 py-3 text-xs">
+                    {p.commissionType === "fixed" ? (
+                      p.commissionFixed > 0 ? (
+                        <span className="font-semibold text-mint">
+                          {fmtFull(p.commissionFixed)}
+                          <span className="ml-0.5 text-[10px] text-white/40">/件</span>
+                        </span>
+                      ) : (
+                        <span className="text-white/30">—</span>
+                      )
+                    ) : p.commissionRate > 0 ? (
+                      <span className="font-semibold text-mint">{p.commissionRate}%</span>
+                    ) : (
+                      <span className="text-white/30">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     <button
@@ -153,7 +171,14 @@ export function ProductsTable() {
             updateProduct(editing.id, data);
             toast.success(`${data.name ?? editing.name} を更新`);
           } else {
-            addProduct(data.name!, data.category, data.unitPrice);
+            addProduct({
+              name: data.name!,
+              category: data.category,
+              unitPrice: data.unitPrice,
+              commissionType: data.commissionType,
+              commissionRate: data.commissionRate,
+              commissionFixed: data.commissionFixed,
+            });
             toast.success(`${data.name} を登録`);
           }
           setFormOpen(false);
@@ -176,6 +201,11 @@ function ProductFormModal({ open, editing, onClose, onSubmit }: FormProps) {
   const [name, setName] = useState(editing?.name ?? "");
   const [category, setCategory] = useState(editing?.category ?? "");
   const [unitPrice, setUnitPrice] = useState(editing?.unitPrice ?? 0);
+  const [commissionType, setCommissionType] = useState<CommissionType>(
+    editing?.commissionType ?? "rate",
+  );
+  const [commissionRate, setCommissionRate] = useState(editing?.commissionRate ?? 0);
+  const [commissionFixed, setCommissionFixed] = useState(editing?.commissionFixed ?? 0);
 
   useEffect(() => {
     if (!open) return;
@@ -183,10 +213,16 @@ function ProductFormModal({ open, editing, onClose, onSubmit }: FormProps) {
       setName(editing.name);
       setCategory(editing.category ?? "");
       setUnitPrice(editing.unitPrice ?? 0);
+      setCommissionType(editing.commissionType ?? "rate");
+      setCommissionRate(editing.commissionRate ?? 0);
+      setCommissionFixed(editing.commissionFixed ?? 0);
     } else {
       setName("");
       setCategory("");
       setUnitPrice(0);
+      setCommissionType("rate");
+      setCommissionRate(0);
+      setCommissionFixed(0);
     }
   }, [open, editing]);
 
@@ -195,10 +231,26 @@ function ProductFormModal({ open, editing, onClose, onSubmit }: FormProps) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit({ name: name.trim(), category: category || undefined, unitPrice: unitPrice || undefined });
+    onSubmit({
+      name: name.trim(),
+      category: category || undefined,
+      unitPrice: unitPrice || undefined,
+      commissionType,
+      commissionRate,
+      commissionFixed,
+    });
   };
 
+  const sampleSale = unitPrice || 100000;
+  const sampleCommission =
+    commissionType === "fixed"
+      ? commissionFixed
+      : Math.round((sampleSale * commissionRate) / 100);
+  const hasCommission =
+    commissionType === "fixed" ? commissionFixed > 0 : commissionRate > 0;
+
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -267,19 +319,112 @@ function ProductFormModal({ open, editing, onClose, onSubmit }: FormProps) {
           </div>
         </label>
 
-        <label className="mb-5 block">
+        <label className="mb-3 block">
           <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
             標準単価（円・任意）
           </div>
           <input
             type="number"
             min={0}
-            step={1000}
-            value={unitPrice}
-            onChange={(e) => setUnitPrice(Number(e.target.value))}
+            step={1}
+            inputMode="numeric"
+            value={unitPrice === 0 ? "" : unitPrice}
+            onChange={(e) =>
+              setUnitPrice(e.target.value === "" ? 0 : Number(e.target.value))
+            }
+            placeholder="例: 1980"
             className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40"
           />
         </label>
+
+        <div className="mb-3">
+          <div className="mb-1.5 text-[10px] uppercase tracking-wider text-white/40">
+            歩合タイプ
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {(
+              [
+                { key: "rate" as const, label: "率 (%)", desc: "売上金額に対する割合" },
+                { key: "fixed" as const, label: "定額 (円/件)", desc: "売上1件あたりの固定額" },
+              ]
+            ).map((t) => {
+              const active = commissionType === t.key;
+              return (
+                <button
+                  type="button"
+                  key={t.key}
+                  onClick={() => setCommissionType(t.key)}
+                  className="rounded-lg border px-3 py-2 text-left transition"
+                  style={{
+                    background: active ? "rgba(0,229,160,0.12)" : "rgba(255,255,255,0.02)",
+                    borderColor: active ? "rgba(0,229,160,0.4)" : "rgba(255,255,255,0.1)",
+                  }}
+                >
+                  <div
+                    className="text-[12px] font-bold"
+                    style={{ color: active ? "#00E5A0" : "rgba(255,255,255,0.7)" }}
+                  >
+                    {t.label}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-white/40">{t.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {commissionType === "rate" ? (
+          <label className="mb-3 block">
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+              歩合率 (%)
+            </div>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              inputMode="decimal"
+              value={commissionRate === 0 ? "" : commissionRate}
+              onChange={(e) =>
+                setCommissionRate(
+                  e.target.value === "" ? 0 : Math.min(100, Math.max(0, Number(e.target.value))),
+                )
+              }
+              placeholder="例: 10"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-white outline-none focus:border-mint/40"
+            />
+          </label>
+        ) : (
+          <label className="mb-3 block">
+            <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+              歩合額（円/件）
+            </div>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={commissionFixed === 0 ? "" : commissionFixed}
+              onChange={(e) =>
+                setCommissionFixed(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+              placeholder="例: 5000"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-white outline-none focus:border-mint/40"
+            />
+          </label>
+        )}
+
+        {hasCommission && (
+          <div className="mb-5 rounded-xl border border-mint/20 bg-mint/[0.06] px-3.5 py-2.5 text-[11px] leading-relaxed text-white/70">
+            💰 従業員の取り分イメージ: 売上{" "}
+            <span className="font-bold text-white">{fmtFull(sampleSale)}</span> → 歩合{" "}
+            <span className="font-bold text-mint">{fmtFull(sampleCommission)}</span>
+            {commissionType === "rate"
+              ? `（売上 × ${commissionRate}%）`
+              : `（定額 ${fmtFull(commissionFixed)}/件）`}
+          </div>
+        )}
+        {!hasCommission && <div className="mb-5" />}
 
         <div className="flex justify-end gap-2">
           <button
@@ -300,5 +445,6 @@ function ProductFormModal({ open, editing, onClose, onSubmit }: FormProps) {
         </div>
       </form>
     </div>
+    </ModalPortal>
   );
 }

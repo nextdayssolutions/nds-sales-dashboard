@@ -9,7 +9,7 @@ import { DevelopmentSheetPanel } from "./DevelopmentSheet";
 import { OneOnOneSheetPanel } from "./OneOnOneSheet";
 
 interface Props {
-  userId: number;
+  userId: string;
   /** owner 以外が開いたとき true */
   readonly?: boolean;
   /** 教育担当 (manager/admin) モードで育成シートの「教育担当」列、1on1の「コメント」欄を編集可 */

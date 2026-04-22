@@ -7,10 +7,11 @@ import type { Customer, CustomerStatus } from "@/types";
 import { useCustomers } from "@/lib/customer-store";
 import { useProducts } from "@/lib/products-store";
 import { RelationDots } from "@/components/common/RelationDots";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface Props {
   open: boolean;
-  ownerId: number;
+  ownerId: string;
   editing: Customer | null;
   onClose: () => void;
 }
@@ -23,7 +24,7 @@ const STATUS_META: Record<CustomerStatus, { color: string; desc: string }> = {
   既存: { color: "#00E5A0", desc: "サービス契約済み" },
 };
 
-const empty = (ownerId: number): Omit<Customer, "id"> => ({
+const empty = (ownerId: string): Omit<Customer, "id"> => ({
   ownerId,
   name: "",
   industry: "",
@@ -55,20 +56,24 @@ export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
 
   if (!open) return null;
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!draft.name.trim()) {
       toast.error("会社名は必須です");
       return;
     }
-    if (editing) {
-      updateCustomer(editing.id, draft);
-      toast.success(`「${draft.name}」を更新しました`);
-    } else {
-      addCustomer(draft);
-      toast.success(`「${draft.name}」を登録しました`);
+    try {
+      if (editing) {
+        await updateCustomer(editing.id, draft);
+        toast.success(`「${draft.name}」を更新しました`);
+      } else {
+        await addCustomer(draft);
+        toast.success(`「${draft.name}」を登録しました`);
+      }
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
     }
-    onClose();
   };
 
   const toggleProduct = (p: string) => {
@@ -80,15 +85,20 @@ export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
     }));
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (!editing) return;
     if (!confirm(`「${editing.name}」を削除します。よろしいですか？`)) return;
-    deleteCustomer(editing.id);
-    toast.success(`「${editing.name}」を削除しました`);
-    onClose();
+    try {
+      await deleteCustomer(editing.id);
+      toast.success(`「${editing.name}」を削除しました`);
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "削除に失敗しました");
+    }
   };
 
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -184,8 +194,16 @@ export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
               <input
                 type="number"
                 min={0}
-                value={draft.revenue}
-                onChange={(e) => setDraft({ ...draft, revenue: Number(e.target.value) })}
+                step={1}
+                inputMode="numeric"
+                value={draft.revenue === 0 ? "" : draft.revenue}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    revenue: e.target.value === "" ? 0 : Number(e.target.value),
+                  })
+                }
+                placeholder="0"
                 className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40"
               />
             </label>
@@ -322,5 +340,6 @@ export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
         </div>
       </form>
     </div>
+    </ModalPortal>
   );
 }

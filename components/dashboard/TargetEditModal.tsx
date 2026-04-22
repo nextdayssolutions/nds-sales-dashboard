@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import type { RevenueTargets } from "@/types";
 import { useRevenueTargets } from "@/lib/sales-store";
 import { fmtFull } from "@/lib/utils";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface Props {
   open: boolean;
-  ownerId: number;
+  ownerId: string;
   year: number;
   onClose: () => void;
 }
@@ -30,25 +31,42 @@ export function TargetEditModal({ open, ownerId, year, onClose }: Props) {
     setDraft({ ...draft, monthly: { ...draft.monthly, [m]: value } });
   };
 
-  const distributeEvenly = (totalYenUnit: number) => {
+  // 月次入力の step (1万円単位) に合わせて丸めたい
+  const ROUND_UNIT = 10000;
+  const roundToUnit = (n: number) =>
+    Math.max(0, Math.round(n / ROUND_UNIT) * ROUND_UNIT);
+
+  const distributeEvenly = (annualTotal: number) => {
+    if (annualTotal <= 0) return;
     // ランプアップ（Q1 24%, Q2 25%, Q3 25%, Q4 26%）で分散
     const quarterShare = [0.24, 0.25, 0.25, 0.26];
     const monthly: Record<number, number> = {};
-    for (let m = 1; m <= 12; m++) {
+    let accumulated = 0;
+    // 1〜11月はそれぞれ四半期の 1/3 を 1万円単位に丸めて配分
+    for (let m = 1; m <= 11; m++) {
       const q = Math.floor((m - 1) / 3);
-      monthly[m] = Math.round((totalYenUnit * quarterShare[q]) / 3);
+      const rounded = roundToUnit((annualTotal * quarterShare[q]) / 3);
+      monthly[m] = rounded;
+      accumulated += rounded;
     }
+    // 12月で端数を吸収して年間目標ちょうどに寄せる
+    monthly[12] = roundToUnit(Math.max(0, annualTotal - accumulated));
     setDraft({ ...draft, monthly });
   };
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    saveTargets(draft);
-    toast.success(`${year}年の目標を保存しました`);
-    onClose();
+    try {
+      await saveTargets(draft);
+      toast.success(`${year}年の目標を保存しました`);
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
+    }
   };
 
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[110] flex items-center justify-center p-4"
@@ -84,7 +102,8 @@ export function TargetEditModal({ open, ownerId, year, onClose }: Props) {
               <input
                 type="number"
                 min={0}
-                step={100000}
+                step={1}
+                inputMode="numeric"
                 placeholder="例: 72000000"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -120,9 +139,13 @@ export function TargetEditModal({ open, ownerId, year, onClose }: Props) {
                 <input
                   type="number"
                   min={0}
-                  step={10000}
-                  value={draft.monthly[m] ?? 0}
-                  onChange={(e) => setMonth(m, Number(e.target.value))}
+                  step={1}
+                  inputMode="numeric"
+                  value={draft.monthly[m] ? draft.monthly[m] : ""}
+                  onChange={(e) =>
+                    setMonth(m, e.target.value === "" ? 0 : Number(e.target.value))
+                  }
+                  placeholder="0"
                   className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] font-semibold text-white outline-none focus:border-amber/40"
                 />
               </label>
@@ -155,5 +178,6 @@ export function TargetEditModal({ open, ownerId, year, onClose }: Props) {
         </div>
       </form>
     </div>
+    </ModalPortal>
   );
 }

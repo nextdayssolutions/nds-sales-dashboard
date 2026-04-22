@@ -16,7 +16,11 @@ import { SchedulePanel } from "@/components/dashboard/SchedulePanel";
 import { RevenuePanel } from "@/components/dashboard/RevenuePanel";
 import { SheetPanel } from "@/components/sheets/SheetPanel";
 import { fmt, fmtFull } from "@/lib/utils";
-import { MOCK_USERS } from "@/lib/mock-data";
+import { useUser } from "@/lib/user-store";
+import { useUserMetrics } from "@/lib/metrics";
+import { ResetPasswordModal } from "./ResetPasswordModal";
+import { KeyRound } from "lucide-react";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface Props {
   target: UserRecord | null;
@@ -45,13 +49,13 @@ const roleColor: Record<UserRole, string> = {
 };
 export function UserDetailModal({ target, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("info");
+  const [pwReset, setPwReset] = useState(false);
+  const metrics = useUserMetrics(target?.id);
+  const manager = useUser(target?.managerId);
   if (!target) return null;
 
-  const manager = target.managerId
-    ? MOCK_USERS.find((u) => u.id === target.managerId)
-    : null;
-
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -131,6 +135,16 @@ export function UserDetailModal({ target, onClose }: Props) {
 
         <div className="overflow-y-auto px-6 py-5">
           {tab === "info" && (
+            <>
+              <div className="mb-5 flex flex-wrap items-center justify-end gap-2">
+                <button
+                  onClick={() => setPwReset(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-coral/30 bg-coral/10 px-3.5 py-1.5 text-[12px] font-bold text-coral hover:bg-coral/15"
+                >
+                  <KeyRound size={13} />
+                  パスワードをリセット
+                </button>
+              </div>
             <div className="grid gap-3 md:grid-cols-2">
               {[
                 { label: "氏名", value: target.name },
@@ -145,20 +159,41 @@ export function UserDetailModal({ target, onClose }: Props) {
                 { label: "マネージャー", value: manager ? manager.name : "—" },
                 { label: "最終ログイン", value: target.lastLogin },
                 {
-                  label: "達成率",
-                  value: target.achievement !== null ? `${target.achievement}%` : "—",
-                },
-                {
                   label: "担当顧客",
-                  value: target.customers !== null ? `${target.customers}社` : "—",
+                  value:
+                    metrics.customerCount > 0
+                      ? `${metrics.customerCount}社`
+                      : "—",
                 },
                 {
                   label: "今月売上",
-                  value: target.monthRevenue ? fmt(target.monthRevenue) : "—",
+                  value:
+                    metrics.monthRevenue > 0 ? fmt(metrics.monthRevenue) : "—",
+                },
+                {
+                  label: "今月達成率",
+                  value:
+                    metrics.monthAchievement !== null
+                      ? `${metrics.monthAchievement}%`
+                      : "—",
                 },
                 {
                   label: "年間累計",
-                  value: target.yearRevenue ? fmtFull(target.yearRevenue) : "—",
+                  value:
+                    metrics.yearRevenue > 0
+                      ? fmtFull(metrics.yearRevenue)
+                      : "—",
+                },
+                {
+                  label: "年間達成率",
+                  value:
+                    metrics.yearAchievement !== null
+                      ? `${metrics.yearAchievement}%`
+                      : "—",
+                },
+                {
+                  label: "育成計画進捗",
+                  value: `${metrics.trainingProgress}% (${metrics.trainingDone}/${metrics.trainingTotal})`,
                 },
               ].map((f) => (
                 <div
@@ -177,6 +212,7 @@ export function UserDetailModal({ target, onClose }: Props) {
                 </div>
               ))}
             </div>
+            </>
           )}
 
           {tab === "crm" && <CRMPanel userId={target.id} readonly />}
@@ -187,6 +223,14 @@ export function UserDetailModal({ target, onClose }: Props) {
           )}
         </div>
       </div>
+
+      <ResetPasswordModal
+        open={pwReset}
+        userId={target.id}
+        userName={target.name}
+        onClose={() => setPwReset(false)}
+      />
     </div>
+    </ModalPortal>
   );
 }

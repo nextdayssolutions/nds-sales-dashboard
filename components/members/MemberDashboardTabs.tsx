@@ -23,7 +23,7 @@ const TABS: { id: MemberTabId; label: string; icon: LucideIcon }[] = [
 ];
 
 interface Props {
-  userId: number;
+  userId: string;
   readonly?: boolean;
   trainerMode?: boolean;
   defaultTab?: MemberTabId;

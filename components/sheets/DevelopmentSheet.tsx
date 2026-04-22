@@ -18,7 +18,7 @@ import {
 import { Field, EvalCheck, ReadOnlyBanner } from "./primitives";
 
 interface Props {
-  userId: number;
+  userId: string;
   readonly?: boolean;
   /** trainer（マネージャー・管理者）モードでは教育担当列のみ編集可 */
   trainerMode?: boolean;
@@ -35,9 +35,13 @@ export function DevelopmentSheetPanel({ userId, readonly, trainerMode }: Props) 
     setDraft(stored);
   }, [stored]);
 
-  const handleSave = () => {
-    save(draft);
-    toast.success("育成計画を保存しました");
+  const handleSave = async () => {
+    try {
+      await save(draft);
+      toast.success("育成計画を保存しました");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
+    }
   };
 
   const { totalSteps, completedSteps, curriculumByPeriod } = useMemo(() => {

@@ -4,6 +4,9 @@ import { FormEvent, useState } from "react";
 import { Copy, RefreshCw, UserPlus, Check, Eye, EyeOff, X } from "lucide-react";
 import { toast } from "sonner";
 import type { UserRole } from "@/types";
+import { createEmployeeAction } from "@/app/actions/users";
+import { useAllUsers, broadcastUsersUpdated } from "@/lib/user-store";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface Props {
   open: boolean;
@@ -25,10 +28,15 @@ function generatePassword(length = 16): string {
 }
 
 export function InviteModal({ open, onClose }: Props) {
+  const { users } = useAllUsers();
+  const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [dept, setDept] = useState("");
+  const [title, setTitle] = useState("");
   const [role, setRole] = useState<UserRole>("member");
+  const [managerId, setManagerId] = useState<string>("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -57,7 +65,9 @@ export function InviteModal({ open, onClose }: Props) {
     setEmail("");
     setName("");
     setDept("");
+    setTitle("");
     setRole("member");
+    setManagerId("");
     setPassword("");
     setCopied(false);
   };
@@ -73,18 +83,30 @@ export function InviteModal({ open, onClose }: Props) {
       return;
     }
     setSubmitting(true);
-    // Phase B: auth.admin.createUser + public.users insert に差し替え
-    setTimeout(() => {
-      setSubmitting(false);
-      toast.success(
-        `${name} のアカウントを作成しました（メール・初期パスワードを本人に伝えてください）`
-      );
-      resetForm();
-      onClose();
-    }, 500);
+    const res = await createEmployeeAction({
+      email,
+      fullName: name,
+      password,
+      role,
+      department: dept || undefined,
+      title: title || undefined,
+      managerId: managerId || undefined,
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "作成に失敗しました");
+      return;
+    }
+    toast.success(
+      `${name} のアカウントを作成しました（メール・初期パスワードを本人に伝えてください）`,
+    );
+    broadcastUsersUpdated();
+    resetForm();
+    onClose();
   };
 
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[100] flex items-center justify-center p-5"
@@ -142,32 +164,65 @@ export function InviteModal({ open, onClose }: Props) {
                 className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
               />
             </label>
-            <label className="block">
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
-                部署
-              </div>
-              <input
-                type="text"
-                value={dept}
-                onChange={(e) => setDept(e.target.value)}
-                placeholder="営業1部"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
-              />
-            </label>
-            <label className="block">
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
-                ロール
-              </div>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
-              >
-                <option value="member" className="bg-bg-panel">従業員</option>
-                <option value="manager" className="bg-bg-panel">マネージャー</option>
-                <option value="admin" className="bg-bg-panel">管理者</option>
-              </select>
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                  部署
+                </div>
+                <input
+                  type="text"
+                  value={dept}
+                  onChange={(e) => setDept(e.target.value)}
+                  placeholder="営業1部"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                  役職
+                </div>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="セールスエンジニア"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                  ロール
+                </div>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
+                >
+                  <option value="member" className="bg-bg-panel">従業員</option>
+                  <option value="manager" className="bg-bg-panel">マネージャー</option>
+                  <option value="admin" className="bg-bg-panel">管理者</option>
+                </select>
+              </label>
+              <label className="block">
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                  マネージャー
+                </div>
+                <select
+                  value={managerId}
+                  onChange={(e) => setManagerId(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
+                >
+                  <option value="" className="bg-bg-panel">— 未設定 —</option>
+                  {managers.map((m) => (
+                    <option key={m.id} value={m.id} className="bg-bg-panel">
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             <div className="mt-2">
               <div className="mb-1.5 flex items-center justify-between">
@@ -247,5 +302,6 @@ export function InviteModal({ open, onClose }: Props) {
         </div>
       </form>
     </div>
+    </ModalPortal>
   );
 }

@@ -3,7 +3,7 @@
 import { BookOpen, X } from "lucide-react";
 import type { UserRecord } from "@/types";
 import { fmt, fmtFull } from "@/lib/utils";
-import { useSheet } from "@/lib/sheet-storage";
+import { useUserMetrics } from "@/lib/metrics";
 
 interface RowProps {
   member: UserRecord;
@@ -12,8 +12,15 @@ interface RowProps {
 }
 
 export function TeamMemberRow({ member, onClick, selected }: RowProps) {
-  const ach = member.achievement ?? 0;
-  const achColor = ach >= 100 ? "#00E5A0" : ach >= 70 ? "#00D4FF" : "#FFB830";
+  const m = useUserMetrics(member.id);
+  const achColor =
+    m.monthAchievement === null
+      ? "#555"
+      : m.monthAchievement >= 100
+        ? "#00E5A0"
+        : m.monthAchievement >= 70
+          ? "#00D4FF"
+          : "#FFB830";
 
   return (
     <tr
@@ -31,25 +38,30 @@ export function TeamMemberRow({ member, onClick, selected }: RowProps) {
         <div className="mt-0.5 text-[11px] text-white/35">{member.title}</div>
       </td>
       <td className="px-3 py-3.5">
-        {member.achievement !== null ? (
+        {m.monthAchievement !== null ? (
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-[60px] overflow-hidden rounded-sm bg-white/[0.08]">
               <div
                 className="h-full"
-                style={{ width: `${Math.min(ach, 100)}%`, background: achColor }}
+                style={{
+                  width: `${Math.min(m.monthAchievement, 100)}%`,
+                  background: achColor,
+                }}
               />
             </div>
-            <span className="text-xs font-semibold text-white">{ach}%</span>
+            <span className="text-xs font-semibold text-white">
+              {m.monthAchievement}%
+            </span>
           </div>
         ) : (
           <span className="text-xs text-white/30">—</span>
         )}
       </td>
       <td className="px-3 py-3.5 text-xs text-white/70">
-        {member.customers !== null ? `${member.customers}社` : "—"}
+        {m.customerCount > 0 ? `${m.customerCount}社` : "—"}
       </td>
       <td className="px-3 py-3.5 text-xs text-white/70">
-        {member.monthRevenue ? fmt(member.monthRevenue) : "—"}
+        {m.monthRevenue > 0 ? fmt(m.monthRevenue) : "—"}
       </td>
       <td className="rounded-r-xl px-3 py-3.5 text-[11px] text-white/40">
         {member.lastLogin}
@@ -65,17 +77,15 @@ interface DetailProps {
 }
 
 export function TeamMemberDetail({ member, onClose, onOpenSheets }: DetailProps) {
-  const ach = member.achievement ?? 0;
-  const achColor = ach >= 100 ? "#00E5A0" : ach >= 70 ? "#00D4FF" : "#FFB830";
-  const [development] = useSheet(member.id, "development");
-  const [oneonone] = useSheet(member.id, "oneonone");
-  const curriculumDone = development.curriculum.filter((c) => c.selfUnderstood && c.selfCanDo).length;
-  const curriculumTotal = development.curriculum.length;
-  const curriculumPct = curriculumTotal === 0 ? 0 : Math.round((curriculumDone / curriculumTotal) * 100);
-  const latest1on1 =
-    oneonone.entries.length > 0
-      ? [...oneonone.entries].sort((a, b) => b.date.localeCompare(a.date))[0].date
-      : null;
+  const m = useUserMetrics(member.id);
+  const achColor =
+    m.monthAchievement === null
+      ? "#555"
+      : m.monthAchievement >= 100
+        ? "#00E5A0"
+        : m.monthAchievement >= 70
+          ? "#00D4FF"
+          : "#FFB830";
 
   return (
     <div
@@ -106,23 +116,24 @@ export function TeamMemberDetail({ member, onClose, onOpenSheets }: DetailProps)
       <div className="mb-5 grid grid-cols-2 gap-3">
         {[
           {
-            label: "達成率",
-            value: `${ach}%`,
+            label: "今月達成率",
+            value:
+              m.monthAchievement !== null ? `${m.monthAchievement}%` : "—",
             color: achColor,
           },
           {
             label: "担当顧客",
-            value: `${member.customers ?? 0}社`,
+            value: m.customerCount > 0 ? `${m.customerCount}社` : "—",
             color: "#00D4FF",
           },
           {
             label: "今月売上",
-            value: fmt(member.monthRevenue ?? 0),
+            value: m.monthRevenue > 0 ? fmt(m.monthRevenue) : "—",
             color: "#FFB830",
           },
           {
             label: "年間累計",
-            value: fmtFull(member.yearRevenue ?? 0),
+            value: m.yearRevenue > 0 ? fmtFull(m.yearRevenue) : "—",
             color: "#B794F4",
           },
         ].map((k) => (
@@ -139,21 +150,21 @@ export function TeamMemberDetail({ member, onClose, onOpenSheets }: DetailProps)
         <div className="mb-2 flex items-center justify-between text-[11px]">
           <span className="text-white/40">育成計画進捗</span>
           <span className="text-white/55">
-            {curriculumDone} / {curriculumTotal} 完了
+            {m.trainingDone} / {m.trainingTotal} 完了
           </span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded bg-white/[0.08]">
           <div
             className="h-full transition-[width] duration-700"
             style={{
-              width: `${curriculumPct}%`,
-              background: curriculumPct >= 80 ? "#00E5A0" : "#00D4FF",
+              width: `${m.trainingProgress}%`,
+              background: m.trainingProgress >= 80 ? "#00E5A0" : "#00D4FF",
             }}
           />
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] text-white/50">
-          <span>{curriculumPct}%</span>
-          <span>最終1on1: {latest1on1 ?? "—"}</span>
+          <span>{m.trainingProgress}%</span>
+          <span>最終1on1: {m.latest1on1 ?? "—"}</span>
         </div>
       </div>
 

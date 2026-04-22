@@ -1,8 +1,8 @@
 export type CustomerStatus = "既存" | "商談中" | "見込み";
 
 export interface Customer {
-  id: number;
-  ownerId: number;
+  id: string;
+  ownerId: string;
   name: string;
   industry: string;
   contact: string;
@@ -24,19 +24,21 @@ export type RevenueType = "stock" | "shot";
 
 export interface SalesRecord {
   id: string;
-  ownerId: number;
+  ownerId: string;
   productName: string;
   revenueType: RevenueType;
   amount: number;
+  /** 歩合額のスナップショット（円）。登録時の商材レートに基づく計算結果 */
+  commissionAmount: number;
   year: number;
   month: number; // 1-12
-  customerId?: number;
+  customerId?: string;
   memo?: string;
   recordedAt: string;
 }
 
 export interface RevenueTargets {
-  ownerId: number;
+  ownerId: string;
   year: number;
   monthly: Record<number, number>; // month(1-12) -> yen
 }
@@ -44,7 +46,7 @@ export interface RevenueTargets {
 export type ScheduleType = "meeting" | "presentation" | "training" | "internal";
 
 export interface ScheduleEvent {
-  id: number;
+  id: string;
   date: string;
   time: string;
   title: string;
@@ -55,25 +57,26 @@ export interface ScheduleEvent {
 export type UserRole = "admin" | "manager" | "member";
 export type UserStatus = "active" | "invited" | "suspended" | "retired";
 
+/**
+ * ユーザープロフィール。担当顧客数・売上・達成率・育成進捗は集計値のため持たない
+ * （`lib/metrics.ts` の `useUserMetrics()` で動的に算出する）。
+ * Supabase `public.users` テーブルと 1:1 対応。
+ */
 export interface UserRecord {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: UserRole;
   status: UserStatus;
   dept: string;
   title?: string;
-  managerId?: number;
+  managerId?: string;
   lastLogin: string;
-  achievement: number | null;
-  customers: number | null;
-  monthRevenue?: number;
-  yearRevenue?: number;
-  trainingProgress?: number;
 }
 
-export interface MockSession {
-  userId: number;
+/** 認証済みセッション情報（Supabase Auth 由来） */
+export interface AuthedSession {
+  userId: string;
   role: UserRole;
 }
 
@@ -165,7 +168,7 @@ export interface OneOnOneEntry {
   monthlyReflection: string;
   other: string;
   managerComment?: string;
-  managerId?: number;
+  managerId?: string;
   reviewedAt?: string;
 }
 

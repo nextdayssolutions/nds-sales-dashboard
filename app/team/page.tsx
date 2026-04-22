@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Crown } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { RoleNav } from "@/components/layout/RoleNav";
 import { RoleGuard } from "@/components/layout/RoleGuard";
 import { TeamMemberRow, TeamMemberDetail } from "@/components/team/TeamMemberRow";
 import { MemberViewModal } from "@/components/members/MemberViewModal";
-import { getTeamMembers, useMockSession } from "@/lib/session";
+import { useAuthedUser } from "@/lib/session";
+import { useTeamMembers } from "@/lib/user-store";
+import { useAggregatedMetrics } from "@/lib/metrics";
 import { fmt, fmtDate } from "@/lib/utils";
 import type { UserRecord } from "@/types";
 
@@ -22,30 +24,54 @@ export default function TeamPage() {
 function TeamBody() {
   const [selected, setSelected] = useState<UserRecord | null>(null);
   const [viewTarget, setViewTarget] = useState<UserRecord | null>(null);
-  const { session, user } = useMockSession();
+  const { session, user } = useAuthedUser();
+  const team = useTeamMembers(user?.id);
+  const active = useMemo(
+    () => team.filter((m) => m.status === "active"),
+    [team],
+  );
+  const teamIds = useMemo(() => team.map((m) => m.id), [team]);
+  const agg = useAggregatedMetrics(teamIds);
+
   if (!session || !user) return null;
 
-  const team = getTeamMembers(user.id);
-  const active = team.filter((m) => m.status === "active");
-  const avgAch =
-    active.length > 0
-      ? Math.round(
-          active.reduce((s, m) => s + (m.achievement ?? 0), 0) / active.length
-        )
-      : 0;
-  const teamMonthRev = team.reduce((s, m) => s + (m.monthRevenue ?? 0), 0);
-  const teamCustomers = team.reduce((s, m) => s + (m.customers ?? 0), 0);
+  const avgAchColor =
+    agg.avgMonthAchievement === null
+      ? "#B794F4"
+      : agg.avgMonthAchievement >= 100
+        ? "#00E5A0"
+        : agg.avgMonthAchievement >= 70
+          ? "#00D4FF"
+          : "#FFB830";
 
   const stats = [
-    { label: "チーム人数", value: `${team.length}名`, sub: `${active.length} アクティブ`, color: "#FFB830" },
-    { label: "チーム今月売上", value: fmt(teamMonthRev), sub: "合計", color: "#00D4FF" },
     {
-      label: "チーム平均達成率",
-      value: `${avgAch}%`,
-      sub: "アクティブメンバー",
-      color: avgAch >= 100 ? "#00E5A0" : avgAch >= 70 ? "#00D4FF" : "#FFB830",
+      label: "チーム人数",
+      value: `${team.length}名`,
+      sub: `${active.length} アクティブ`,
+      color: "#FFB830",
     },
-    { label: "チーム担当顧客", value: `${teamCustomers}社`, sub: "合計", color: "#B794F4" },
+    {
+      label: "チーム今月売上",
+      value: fmt(agg.totalMonthRevenue),
+      sub: `目標 ${fmt(agg.totalMonthTarget)}`,
+      color: "#00D4FF",
+    },
+    {
+      label: "チーム平均今月達成率",
+      value:
+        agg.avgMonthAchievement !== null
+          ? `${agg.avgMonthAchievement}%`
+          : "—",
+      sub: "目標設定メンバーの平均",
+      color: avgAchColor,
+    },
+    {
+      label: "チーム担当顧客",
+      value: `${agg.totalCustomers}社`,
+      sub: "合計",
+      color: "#B794F4",
+    },
   ];
 
   return (
@@ -67,7 +93,7 @@ function TeamBody() {
           <RoleNav role={user.role} current="team" />
           <div className="text-right">
             <div className="text-xs text-white/40">
-              {fmtDate(new Date("2026-04-19"))}
+              {fmtDate(new Date())}
             </div>
             <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber/20 bg-amber/10 px-3 py-0.5 text-[11px] text-amber">
               <Crown size={11} />
@@ -123,7 +149,7 @@ function TeamBody() {
                   <tr className="text-left text-[11px] text-white/40">
                     <th className="px-3 pb-2">メンバー</th>
                     <th className="px-3 pb-2">部署 / 役職</th>
-                    <th className="px-3 pb-2">達成率</th>
+                    <th className="px-3 pb-2">今月達成率</th>
                     <th className="px-3 pb-2">担当</th>
                     <th className="px-3 pb-2">今月売上</th>
                     <th className="px-3 pb-2">最終ログイン</th>

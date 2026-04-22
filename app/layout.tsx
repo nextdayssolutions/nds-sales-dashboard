@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Noto_Sans_JP } from "next/font/google";
 import { Toaster } from "sonner";
-import { SheetSeeder } from "@/components/layout/SheetSeeder";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -34,7 +33,6 @@ export default function RootLayout({
         className="min-h-screen bg-bg text-white antialiased"
         style={{ fontFamily: `${dmSans.style.fontFamily}, ${notoSansJP.style.fontFamily}, sans-serif` }}
       >
-        <SheetSeeder />
         {children}
         <Toaster
           theme="dark"

@@ -9,7 +9,7 @@ import { SHEET_META } from "@/lib/curriculum-data";
 import { Field, ReadOnlyBanner } from "./primitives";
 
 interface Props {
-  userId: number;
+  userId: string;
   readonly?: boolean;
 }
 
@@ -23,9 +23,13 @@ export function VisionSheetPanel({ userId, readonly }: Props) {
     setDraft(stored);
   }, [stored]);
 
-  const handleSave = () => {
-    save(draft);
-    toast.success("理念・ビジョンを保存しました");
+  const handleSave = async () => {
+    try {
+      await save(draft);
+      toast.success("理念・ビジョンを保存しました");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
+    }
   };
 
   const update = (patch: Partial<VisionSheet>) =>

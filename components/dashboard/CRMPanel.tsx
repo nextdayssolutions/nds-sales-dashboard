@@ -9,7 +9,7 @@ import { useCustomers } from "@/lib/customer-store";
 import { CustomerFormModal } from "./CustomerFormModal";
 
 interface Props {
-  userId: number;
+  userId: string;
   readonly?: boolean;
 }
 

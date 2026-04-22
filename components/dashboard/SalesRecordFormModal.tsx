@@ -6,12 +6,13 @@ import { toast } from "sonner";
 import type { RevenueType, SalesRecord } from "@/types";
 import { useSalesRecords } from "@/lib/sales-store";
 import { useCustomers } from "@/lib/customer-store";
-import { useProducts } from "@/lib/products-store";
+import { useProducts, computeCommission } from "@/lib/products-store";
 import { fmtFull } from "@/lib/utils";
+import { ModalPortal } from "@/components/common/ModalPortal";
 
 interface Props {
   open: boolean;
-  ownerId: number;
+  ownerId: string;
   year: number;
   editing: SalesRecord | null;
   prefill?: { productName?: string; month?: number; revenueType?: RevenueType };
@@ -25,11 +26,12 @@ const REVENUE_TYPES: { key: RevenueType; label: string; desc: string; color: str
   { key: "shot", label: "ショット", desc: "一時的売上・初期費用など", color: "#FFB830", icon: Package },
 ];
 
-const emptyDraft = (ownerId: number, year: number, firstProduct: string): DraftRecord => ({
+const emptyDraft = (ownerId: string, year: number, firstProduct: string): DraftRecord => ({
   ownerId,
   productName: firstProduct,
   revenueType: "stock",
   amount: 0,
+  commissionAmount: 0,
   year,
   month: new Date().getMonth() + 1,
   customerId: undefined,
@@ -49,6 +51,21 @@ export function SalesRecordFormModal({
   const { products } = useProducts();
   const firstProduct = products[0]?.name ?? "";
   const [draft, setDraft] = useState<DraftRecord>(() => emptyDraft(ownerId, year, firstProduct));
+  // 歩合額を手動で編集したか（true なら自動再計算しない）
+  const [commissionTouched, setCommissionTouched] = useState(false);
+
+  // 選択中商材の歩合定義を取得
+  const selectedProduct = products.find((p) => p.name === draft.productName);
+  const autoCommission = computeCommission(selectedProduct, draft.amount);
+  const commissionLabel = selectedProduct
+    ? selectedProduct.commissionType === "fixed"
+      ? selectedProduct.commissionFixed > 0
+        ? `${draft.productName} の歩合: ${fmtFull(selectedProduct.commissionFixed)}/件`
+        : `${draft.productName} は歩合未設定`
+      : selectedProduct.commissionRate > 0
+        ? `${draft.productName} の歩合率: ${selectedProduct.commissionRate}%`
+        : `${draft.productName} は歩合 0%`
+    : "商材未選択";
 
   useEffect(() => {
     if (editing) {
@@ -56,6 +73,7 @@ export function SalesRecordFormModal({
       void _id;
       void _r;
       setDraft(rest);
+      setCommissionTouched(true); // 既存レコード編集時はスナップショット値を尊重
     } else if (prefill) {
       setDraft({
         ...emptyDraft(ownerId, year, firstProduct),
@@ -63,38 +81,57 @@ export function SalesRecordFormModal({
         ...(prefill.month ? { month: prefill.month } : {}),
         ...(prefill.revenueType ? { revenueType: prefill.revenueType } : {}),
       });
+      setCommissionTouched(false);
     } else {
       setDraft(emptyDraft(ownerId, year, firstProduct));
+      setCommissionTouched(false);
     }
   }, [editing, prefill, ownerId, year, open, firstProduct]);
 
+  // 新規登録中かつ手動編集されていない場合、amount or product 変更で歩合を再計算
+  useEffect(() => {
+    if (!commissionTouched) {
+      setDraft((d) => ({ ...d, commissionAmount: autoCommission }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.amount, draft.productName, commissionTouched]);
+
   if (!open) return null;
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (draft.amount <= 0) {
       toast.error("金額を入力してください");
       return;
     }
-    if (editing) {
-      updateRecord(editing.id, draft);
-      toast.success("売上レコードを更新しました");
-    } else {
-      addRecord(draft);
-      toast.success(`${draft.month}月の ${draft.productName} を登録しました`);
+    try {
+      if (editing) {
+        await updateRecord(editing.id, draft);
+        toast.success("売上レコードを更新しました");
+      } else {
+        await addRecord(draft);
+        toast.success(`${draft.month}月の ${draft.productName} を登録しました`);
+      }
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存に失敗しました");
     }
-    onClose();
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (!editing) return;
     if (!confirm("この売上レコードを削除します。よろしいですか？")) return;
-    deleteRecord(editing.id);
-    toast.success("削除しました");
-    onClose();
+    try {
+      await deleteRecord(editing.id);
+      toast.success("削除しました");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "削除に失敗しました");
+    }
   };
 
   return (
+    <ModalPortal>
     <div
       onClick={onClose}
       className="fixed inset-0 z-[110] flex items-center justify-center p-4"
@@ -221,9 +258,16 @@ export function SalesRecordFormModal({
               <input
                 type="number"
                 min={0}
-                step={1000}
-                value={draft.amount}
-                onChange={(e) => setDraft({ ...draft, amount: Number(e.target.value) })}
+                step={1}
+                inputMode="numeric"
+                value={draft.amount === 0 ? "" : draft.amount}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    amount: e.target.value === "" ? 0 : Number(e.target.value),
+                  })
+                }
+                placeholder="例: 300000"
                 className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] font-bold text-white outline-none focus:border-cyan/40"
                 required
               />
@@ -233,6 +277,57 @@ export function SalesRecordFormModal({
                 </div>
               )}
             </label>
+          </div>
+
+          {/* 歩合額（商材レートから自動計算・手動編集可） */}
+          <div className="mb-5 rounded-xl border border-mint/20 bg-mint/[0.05] p-3.5">
+            <div className="mb-2 flex items-center justify-between text-[10px]">
+              <div className="uppercase tracking-wider text-mint/90">
+                💰 歩合額（従業員のバック）
+              </div>
+              <div className="text-white/40">{commissionLabel}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                value={draft.commissionAmount === 0 ? "" : draft.commissionAmount}
+                onChange={(e) => {
+                  setCommissionTouched(true);
+                  setDraft({
+                    ...draft,
+                    commissionAmount: e.target.value === "" ? 0 : Number(e.target.value),
+                  });
+                }}
+                placeholder={autoCommission > 0 ? String(autoCommission) : "0"}
+                className="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] font-bold text-mint outline-none focus:border-mint/40"
+              />
+              {commissionTouched && autoCommission !== draft.commissionAmount && autoCommission > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCommissionTouched(false);
+                    setDraft({ ...draft, commissionAmount: autoCommission });
+                  }}
+                  className="rounded-lg border border-mint/30 bg-mint/10 px-2.5 py-2 text-[11px] text-mint hover:bg-mint/15"
+                  title="商材の歩合率から自動計算に戻す"
+                >
+                  自動計算
+                </button>
+              )}
+            </div>
+            {draft.commissionAmount > 0 && (
+              <div className="mt-1 text-[10px] text-white/40">
+                {fmtFull(draft.commissionAmount)}
+                {commissionTouched && autoCommission !== draft.commissionAmount && (
+                  <span className="ml-2 text-amber/80">
+                    ⚠ 手動編集中（自動計算値: {fmtFull(autoCommission)}）
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mb-5">
@@ -245,7 +340,7 @@ export function SalesRecordFormModal({
                 onChange={(e) =>
                   setDraft({
                     ...draft,
-                    customerId: e.target.value ? Number(e.target.value) : undefined,
+                    customerId: e.target.value || undefined,
                   })
                 }
                 className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40"
@@ -315,5 +410,6 @@ export function SalesRecordFormModal({
         </div>
       </form>
     </div>
+    </ModalPortal>
   );
 }

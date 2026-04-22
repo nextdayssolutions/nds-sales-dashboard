@@ -8,9 +8,7 @@ import {
   emptyOneOnOne,
   emptyVision,
 } from "@/lib/curriculum-data";
-
-const PREFIX = "sheet-v1";
-const key = (userId: number, kind: SheetKind) => `${PREFIX}:${userId}:${kind}`;
+import { createClient } from "@/lib/supabase/client";
 
 function defaults(): SheetSet {
   return {
@@ -21,92 +19,115 @@ function defaults(): SheetSet {
   };
 }
 
-function readOne<K extends SheetKind>(userId: number, kind: K): SheetSet[K] {
-  if (typeof window === "undefined") return defaults()[kind];
-  try {
-    const raw = localStorage.getItem(key(userId, kind));
-    if (!raw) return defaults()[kind];
-    return JSON.parse(raw) as SheetSet[K];
-  } catch {
-    return defaults()[kind];
+const EVENT = "sheet-updated";
+
+function emitUpdate(userId: string, kind: SheetKind) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(EVENT, { detail: { userId, kind } }));
   }
 }
 
-function writeOne<K extends SheetKind>(userId: number, kind: K, value: SheetSet[K]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(key(userId, kind), JSON.stringify(value));
-  // fan-out a custom event so other components in the same tab react
-  window.dispatchEvent(new CustomEvent("sheet-updated", { detail: { userId, kind } }));
+async function fetchOne<K extends SheetKind>(
+  userId: string,
+  kind: K,
+): Promise<SheetSet[K]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("personal_sheets")
+    .select("content")
+    .eq("user_id", userId)
+    .eq("sheet_kind", kind)
+    .maybeSingle();
+  if (error) {
+    console.error("sheet fetch failed", error);
+    return defaults()[kind];
+  }
+  if (!data) return defaults()[kind];
+  return data.content as SheetSet[K];
 }
 
-export function getAllSheets(userId: number): SheetSet {
-  return {
-    vision: readOne(userId, "vision"),
-    goal: readOne(userId, "goal"),
-    development: readOne(userId, "development"),
-    oneonone: readOne(userId, "oneonone"),
-  };
+async function saveOne<K extends SheetKind>(
+  userId: string,
+  kind: K,
+  value: SheetSet[K],
+) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("personal_sheets")
+    .upsert(
+      {
+        user_id: userId,
+        sheet_kind: kind,
+        content: value as unknown as Record<string, unknown>,
+      },
+      { onConflict: "user_id,sheet_kind" },
+    );
+  if (error) {
+    console.error("sheet upsert failed", error);
+    throw error;
+  }
+  emitUpdate(userId, kind);
+}
+
+export async function getAllSheetsAsync(userId: string): Promise<SheetSet> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("personal_sheets")
+    .select("sheet_kind, content")
+    .eq("user_id", userId);
+  const base = defaults();
+  if (error) {
+    console.error("sheets fetch failed", error);
+    return base;
+  }
+  for (const row of data ?? []) {
+    const kind = row.sheet_kind as SheetKind;
+    (base as Record<SheetKind, unknown>)[kind] = row.content;
+  }
+  return base;
 }
 
 export function useSheet<K extends SheetKind>(
-  userId: number,
-  kind: K
-): [SheetSet[K], (next: SheetSet[K]) => void] {
+  userId: string | undefined,
+  kind: K,
+): [SheetSet[K], (next: SheetSet[K]) => Promise<void>] {
   const [value, setValue] = useState<SheetSet[K]>(() => defaults()[kind]);
 
   useEffect(() => {
-    setValue(readOne(userId, kind));
+    let cancelled = false;
+    const load = async () => {
+      if (!userId) {
+        setValue(defaults()[kind]);
+        return;
+      }
+      const data = await fetchOne(userId, kind);
+      if (!cancelled) setValue(data);
+    };
+    load();
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { userId: number; kind: SheetKind };
+      const detail = (e as CustomEvent).detail as
+        | { userId: string; kind: SheetKind }
+        | undefined;
+      if (!detail) return;
       if (detail.userId === userId && detail.kind === kind) {
-        setValue(readOne(userId, kind));
+        load();
       }
     };
-    window.addEventListener("sheet-updated", handler);
-    return () => window.removeEventListener("sheet-updated", handler);
+    window.addEventListener(EVENT, handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(EVENT, handler);
+    };
   }, [userId, kind]);
 
   const save = useCallback(
-    (next: SheetSet[K]) => {
-      writeOne(userId, kind, next);
+    async (next: SheetSet[K]) => {
+      if (!userId) return;
+      await saveOne(userId, kind, next);
       setValue(next);
     },
-    [userId, kind]
+    [userId, kind],
   );
 
   return [value, save];
-}
-
-// ───────── 提出状況の判定（admin のシート配布タブ用） ─────────
-
-export interface SheetSubmissionStatus {
-  vision: "submitted" | "empty";
-  goal: "submitted" | "empty";
-  development: { progress: number; completed: number; total: number };
-  oneonone: { count: number; latest: string | null };
-}
-
-export function evalSubmissionStatus(userId: number): SheetSubmissionStatus {
-  const all = getAllSheets(userId);
-  const visionFilled =
-    !!all.vision.principle1.trim() ||
-    !!all.vision.principle2.trim() ||
-    !!all.vision.principle3.trim();
-  const goalFilled = Object.values(all.goal.wishes).some((w) => w.content.trim().length > 0);
-  const total = all.development.curriculum.length;
-  const completed = all.development.curriculum.filter(
-    (c) => c.selfUnderstood && c.selfCanDo
-  ).length;
-  const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
-  const count = all.oneonone.entries.length;
-  const latest =
-    all.oneonone.entries.length > 0
-      ? [...all.oneonone.entries].sort((a, b) => b.date.localeCompare(a.date))[0].date
-      : null;
-  return {
-    vision: visionFilled ? "submitted" : "empty",
-    goal: goalFilled ? "submitted" : "empty",
-    development: { progress, completed, total },
-    oneonone: { count, latest },
-  };
 }

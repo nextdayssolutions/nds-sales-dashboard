@@ -50,20 +50,24 @@
 - Step 4.7: 顧客データを per-user 化（ownerId）、CRM 新規登録/編集/削除、ステータス3種（既存/商談中/見込み）のピル UI、localStorage 永続化
 - Step 4.8: 管理者・マネージャーから任意メンバーの **CRM / スケジュール / 売上 / 自己管理** を横断的に閲覧（`MemberViewModal` / admin 5タブモーダル）
 - Step 4.9: 売上管理を **商材 × 月 のマトリクス** に刷新。ストック/ショット区分で記録、月次目標と達成率、年間累計、セルクリックで明細リスト + 追加、MRR 可視化
+- Step 4.10: **指標の単一ソース化**（`lib/metrics.ts`）。担当顧客数・今月売上・年間累計・今月達成率・年間達成率・育成計画進捗・最終1on1 を `useUserMetrics(userId)` / `useAggregatedMetrics(userIds)` に集約し、admin・manager・member 3 画面の数値齟齬を構造的に排除。`UserRecord` から集計フィールドを撤去してプロフィール専用型に整理、モック用シード値は `sales-seed.ts` 内の `USER_SEED` に閉じ込め
 - モックセッション管理（`lib/session.ts`）でロール別ナビ・ログアウト対応
 
-### 進行中（Phase B）🚧
-- ✅ **B-1**: DB スキーマ最終版（`supabase/migrations/0001_init.sql` + `0002_seed_products.sql`）準備完了
+### Phase B（Supabase 接続）✅ 完了
+- ✅ **B-1**: DB スキーマ適用（`0001_init.sql` / `0002_seed_products.sql` / `0003_harden_function_search_path.sql` / `0004_optimize_rls_initplan.sql`）
 - ✅ **B-2**: Supabase クライアント基盤（`lib/supabase/server.ts` / `client.ts` / `middleware.ts` + root `middleware.ts`）
-- ✅ **B-3**: ログイン UI を email+password に刷新（モック切替は dev 環境のみ）
-- ✅ **B-4**: InviteModal を「アカウント作成 + 初期パスワード（手入力 / 自動生成16桁）」に刷新
+- ✅ **B-3**: ログイン UI を email+password に刷新
+- ✅ **B-4**: InviteModal を Server Action 化（`createEmployeeAction`）。ロール・役職・マネージャーも設定可能
 - ✅ **B-5**: Google カレンダー連携 OAuth ルート（`/api/calendar/connect` `/callback` + `lib/google-oauth.ts`）
-- ⏳ **B-6**: `customer-store` / `sales-store` / `sheet-storage` の localStorage → Supabase 置換（**キー受領後に着手**）
-- ⏳ **B-7**: Server Actions で CRUD、RLS 動作検証
+- ✅ **B-6**: 全 store を Supabase 版に刷新（`customer-store` / `sales-store` / `sheet-storage` / `products-store` / `user-store`）。全 ID を UUID 文字列に型変更。モックデータ・シード機構を撤去
+- ✅ **B-7**: Server Actions（`createEmployeeAction` / `updateEmployeeAction` / `deleteEmployeeAction` / `resetEmployeePasswordAction`）+ audit_logs 書き込み
+- ✅ **B-Extra**: パスワード変更（本人: RoleNav の「パスワード」 / admin: UserDetailModal の「パスワードをリセット」）
 - ⏳ **B-8**: GitHub Actions（週次 Supabase keep-alive + 週次 DB backup）
 
-### 未着手 ⏳
-- Phase C: Vercel env 設定、本番デプロイ、初期 admin 作成、実ユーザーテスト
+### Phase C（本番化）⏳
+- Vercel env 設定 + 本番デプロイ
+- 本番 Supabase の Auth Provider 設定確認（Signup: OFF / Confirm Email: OFF / Secure password change: ON）
+- 実ユーザーテスト（admin 運用 → member 招待 → データ入力フロー）
 
 ## ディレクトリ構造
 
@@ -89,28 +93,31 @@
   /dashboard/                 # CRMPanel, SchedulePanel, RevenuePanel, CustomerFormModal
 /lib
   utils.ts                    # cn(), fmt(), fmtFull(), fmtDate()
-  session.ts                  # モック: useMockSession / getTeamMembers
-  mock-data.ts                # CUSTOMERS(28件 per-owner) / MONTHLY_REVENUE / MOCK_USERS
+  session.ts                  # useAuthedUser() — Supabase Auth + public.users 統合（useMockSession は alias）
   curriculum-data.ts          # xlsx 準拠の育成カリキュラム定数 + emptyXxx() ファクトリ
-  customer-store.ts           # localStorage ベースの useCustomers() / CRUD
-  sales-store.ts              # useSalesRecords() + useRevenueTargets()
-  sales-seed.ts               # 過去4ヶ月の売上レコードと目標を自動生成
-  sheet-storage.ts            # localStorage ベースの useSheet() / evalSubmissionStatus()
-  sheet-seed.ts               # 田中/山田のサンプルシートを初回投入
-  products-store.ts           # 商材マスタ（管理者管理）
+  customer-store.ts           # useCustomers() — Supabase customers CRUD
+  sales-store.ts              # useSalesRecords() / useRevenueTargets() / useAllRevenueTargets() — Supabase
+  sheet-storage.ts            # useSheet() / getAllSheetsAsync() — personal_sheets (JSONB content)
+  products-store.ts           # useProducts() — Supabase products (シード無し)
+  user-store.ts               # useAllUsers() / useTeamMembers() / useUser() — public.users リスト
+  metrics.ts                  # useUserMetrics() / useAggregatedMetrics() — 指標の単一ソース
   google-oauth.ts             # Google Calendar OAuth ヘルパー
   /supabase
     env.ts                    # 環境変数 + isSupabaseConfigured 判定
     server.ts                 # createClient() / createAdminClient()
     client.ts                 # createBrowserClient()
     middleware.ts             # updateSession() — 未設定時は素通り
+/app/actions/users.ts         # createEmployeeAction / updateEmployeeAction / resetEmployeePasswordAction / deleteEmployeeAction
 /middleware.ts                # 未ログインを /login へ
 /app/api/calendar/{connect,callback}/route.ts
 /supabase/                    # Supabase 用 SQL マイグレーション（README 参照）
   migrations/0001_init.sql
-  migrations/0002_seed_products.sql
+  migrations/0002_seed_products.sql       # （products は後で手動で追加する方針。DB 上は INSERT 済だが app 側で削除済）
+  migrations/0003_harden_function_search_path.sql
+  migrations/0004_optimize_rls_initplan.sql
   README.md
-/types/index.ts               # 共通型（SheetSet / VisionSheet / GoalSheet / DevelopmentSheet / OneOnOneSheet 等）
+/types/index.ts               # 共通型（UserRecord / Customer / SalesRecord / SheetSet / etc、全 ID が string）
+/types/supabase.ts            # Supabase から自動生成した Database 型
 /docs                         # 設計資料（編集禁止）
 ```
 
