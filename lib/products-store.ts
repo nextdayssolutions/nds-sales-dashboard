@@ -14,11 +14,11 @@ const KEY = "products-v1";
 const SEED_FLAG = "products-seed-v1";
 
 const DEFAULT_PRODUCTS: Product[] = [
-  { id: "p-sfa", name: "SFA Pro", category: "ストック", unitPrice: 50000, isActive: true },
-  { id: "p-erp", name: "ERP Suite", category: "ストック", unitPrice: 100000, isActive: true },
-  { id: "p-ma", name: "MA Basic", category: "ストック", unitPrice: 30000, isActive: true },
-  { id: "p-pos", name: "POS Cloud", category: "ストック", unitPrice: 40000, isActive: true },
-  { id: "p-crm", name: "CRM Light", category: "ストック", unitPrice: 20000, isActive: true },
+  { id: "p-sfa", name: "N-Free", category: "ストック", unitPrice: 50000, isActive: true },
+  { id: "p-erp", name: "DX研修", category: "ストック", unitPrice: 100000, isActive: true },
+  { id: "p-ma", name: "はたらくAI", category: "ストック", unitPrice: 30000, isActive: true },
+  { id: "p-pos", name: "claudeファイル", category: "ストック", unitPrice: 40000, isActive: true },
+  { id: "p-crm", name: "トリドリ", category: "ストック", unitPrice: 20000, isActive: true },
 ];
 
 function readAll(): Product[] {

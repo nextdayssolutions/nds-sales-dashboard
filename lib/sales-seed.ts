@@ -11,11 +11,11 @@ const SEED_FLAG = "sales-seed-v1";
 // 月の重み（過去4ヶ月分）と商材の重みは PRODUCT_REVENUE 由来の典型パターン
 const MONTH_WEIGHTS = [0.26, 0.28, 0.32, 0.14, 0, 0, 0, 0, 0, 0, 0, 0]; // Jan-Apr のみ
 const PRODUCT_WEIGHTS: Record<string, number> = {
-  "SFA Pro": 0.3,
-  "ERP Suite": 0.35,
-  "MA Basic": 0.15,
-  "POS Cloud": 0.12,
-  "CRM Light": 0.08,
+  "N-Free": 0.3,
+  "DX研修": 0.35,
+  "はたらくAI": 0.15,
+  "claudeファイル": 0.12,
+  "トリドリ": 0.08,
 };
 const STOCK_RATIO = 0.7; // 70% がストック売上、30% がショット
 
