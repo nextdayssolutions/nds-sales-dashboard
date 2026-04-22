@@ -60,6 +60,6 @@ export const MOCK_USERS: UserRecord[] = [
   { id: 3, name: "佐藤 健太", email: "sato@example.co.jp", role: "member", status: "active", dept: "営業2部", title: "セールスエンジニア", lastLogin: "2026-04-18 18:44", achievement: 87, customers: 6, monthRevenue: 4800000, yearRevenue: 16200000, trainingProgress: 68 },
   { id: 4, name: "鈴木 まり", email: "suzuki@example.co.jp", role: "member", status: "invited", dept: "営業1部", title: "セールスエンジニア", managerId: 2, lastLogin: "—", achievement: 0, customers: 0, monthRevenue: 0, yearRevenue: 0, trainingProgress: 0 },
   { id: 5, name: "高橋 翔", email: "takahashi@example.co.jp", role: "member", status: "active", dept: "営業1部", title: "アカウントエグゼクティブ", managerId: 2, lastLogin: "2026-04-19 10:12", achievement: 94, customers: 6, monthRevenue: 5200000, yearRevenue: 21100000, trainingProgress: 71 },
-  { id: 6, name: "伊藤 由紀", email: "ito@example.co.jp", role: "admin", status: "active", dept: "管理部", title: "管理部 部長", lastLogin: "2026-04-19 11:05", achievement: null, customers: null },
+  { id: 6, name: "椎葉 光太", email: "shiiba@nextdays-solutions.com", role: "admin", status: "active", dept: "代表", title: "代表", lastLogin: "2026-04-19 11:05", achievement: null, customers: null },
   { id: 7, name: "渡辺 龍一", email: "watanabe@example.co.jp", role: "member", status: "suspended", dept: "営業2部", title: "セールスエンジニア", lastLogin: "2026-03-28 14:22", achievement: 32, customers: 4, monthRevenue: 1800000, yearRevenue: 7400000, trainingProgress: 24 },
 ];

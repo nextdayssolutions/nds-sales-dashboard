@@ -43,7 +43,7 @@ const ROLES: {
     color: "#FF6B6B",
     tint: "rgba(255,107,107,0.12)",
     icon: ShieldCheck,
-    desc: "全従業員管理（伊藤 由紀）",
+    desc: "全従業員管理（椎葉 光太）",
   },
 ];
 
