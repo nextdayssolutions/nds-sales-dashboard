@@ -15,10 +15,27 @@
 
 - Next.js 14 (App Router) + TypeScript (strict)
 - Tailwind CSS（shadcn/ui は未導入 — 必要になったら追加）
-- Supabase (PostgreSQL + Auth + RLS) ※ フェーズ1 Step 5 以降で接続
-- Vercel (Hobby) デプロイ
+- Supabase (PostgreSQL + Auth + RLS) ※ Phase B で接続
+- Vercel (Hobby) デプロイ — GitHub repo は **Public**（Hobby は private org 不可の制約回避）
 - アイコン: `lucide-react`
 - トースト: `sonner`
+
+## 認証方式（Phase B 確定）
+
+- **メール + パスワード**（Supabase 標準）
+- admin が `auth.admin.createUser()` で直接アカウント作成、初期パスワードを手渡し or Slack 伝達
+- InviteModal は「手入力 or 16桁自動生成」両対応
+- Confirm email: OFF（admin 作成なので確認不要）
+- Google SSO は不採用（Workspace 非使用のため）
+
+## Google カレンダー連携（任意・後付け）
+
+- **ログインとは完全独立した別 OAuth フロー**
+- スコープ: `calendar.readonly`（閲覧のみ）
+- `/api/calendar/connect` → Google 認可 → `/api/calendar/callback` → `public.users.google_refresh_token` に保存
+- OAuth アプリは External + Production（未検証）。初回のみ「未検証」警告を 3 クリック通過、以降は refresh_token 永続
+- 未連携ユーザーも普通にアプリ利用可（「連携する」ボタンがスケジュールタブに表示）
+- admin/manager は配下の refresh_token でサーバー側取得して表示
 
 ## 進捗（現状）
 
@@ -35,11 +52,18 @@
 - Step 4.9: 売上管理を **商材 × 月 のマトリクス** に刷新。ストック/ショット区分で記録、月次目標と達成率、年間累計、セルクリックで明細リスト + 追加、MRR 可視化
 - モックセッション管理（`lib/session.ts`）でロール別ナビ・ログアウト対応
 
+### 進行中（Phase B）🚧
+- ✅ **B-1**: DB スキーマ最終版（`supabase/migrations/0001_init.sql` + `0002_seed_products.sql`）準備完了
+- ✅ **B-2**: Supabase クライアント基盤（`lib/supabase/server.ts` / `client.ts` / `middleware.ts` + root `middleware.ts`）
+- ✅ **B-3**: ログイン UI を email+password に刷新（モック切替は dev 環境のみ）
+- ✅ **B-4**: InviteModal を「アカウント作成 + 初期パスワード（手入力 / 自動生成16桁）」に刷新
+- ✅ **B-5**: Google カレンダー連携 OAuth ルート（`/api/calendar/connect` `/callback` + `lib/google-oauth.ts`）
+- ⏳ **B-6**: `customer-store` / `sales-store` / `sheet-storage` の localStorage → Supabase 置換（**キー受領後に着手**）
+- ⏳ **B-7**: Server Actions で CRUD、RLS 動作検証
+- ⏳ **B-8**: GitHub Actions（週次 Supabase keep-alive + 週次 DB backup）
+
 ### 未着手 ⏳
-- Step 5: Supabase プロジェクト作成＋スキーマ適用＋型生成
-- Step 6: Google SSO 実接続（`@supabase/ssr` + middleware.ts + /auth/callback）
-- Step 7: 招待フロー Server Action（`auth.admin.inviteUserByEmail`）
-- Step 8: CRM 顧客管理を RLS 経由の実データに差し替え
+- Phase C: Vercel env 設定、本番デプロイ、初期 admin 作成、実ユーザーテスト
 
 ## ディレクトリ構造
 
@@ -73,6 +97,19 @@
   sales-seed.ts               # 過去4ヶ月の売上レコードと目標を自動生成
   sheet-storage.ts            # localStorage ベースの useSheet() / evalSubmissionStatus()
   sheet-seed.ts               # 田中/山田のサンプルシートを初回投入
+  products-store.ts           # 商材マスタ（管理者管理）
+  google-oauth.ts             # Google Calendar OAuth ヘルパー
+  /supabase
+    env.ts                    # 環境変数 + isSupabaseConfigured 判定
+    server.ts                 # createClient() / createAdminClient()
+    client.ts                 # createBrowserClient()
+    middleware.ts             # updateSession() — 未設定時は素通り
+/middleware.ts                # 未ログインを /login へ
+/app/api/calendar/{connect,callback}/route.ts
+/supabase/                    # Supabase 用 SQL マイグレーション（README 参照）
+  migrations/0001_init.sql
+  migrations/0002_seed_products.sql
+  README.md
 /types/index.ts               # 共通型（SheetSet / VisionSheet / GoalSheet / DevelopmentSheet / OneOnOneSheet 等）
 /docs                         # 設計資料（編集禁止）
 ```

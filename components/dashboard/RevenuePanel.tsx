@@ -3,9 +3,10 @@
 import { Fragment, useMemo, useState } from "react";
 import { Plus, Target, Zap, Package, Pencil, X } from "lucide-react";
 import type { RevenueType, SalesRecord } from "@/types";
-import { MOCK_USERS, PRODUCTS } from "@/lib/mock-data";
+import { MOCK_USERS } from "@/lib/mock-data";
 import { useSalesRecords, useRevenueTargets } from "@/lib/sales-store";
 import { useCustomers } from "@/lib/customer-store";
+import { useProducts } from "@/lib/products-store";
 import { fmt, fmtFull } from "@/lib/utils";
 import { SalesRecordFormModal } from "./SalesRecordFormModal";
 import { TargetEditModal } from "./TargetEditModal";
@@ -15,13 +16,18 @@ interface Props {
   readonly?: boolean;
 }
 
-const PRODUCT_COLORS: Record<string, string> = {
-  "SFA Pro": "#00D4FF",
-  "ERP Suite": "#B794F4",
-  "MA Basic": "#00E5A0",
-  "POS Cloud": "#FFB830",
-  "CRM Light": "#FF6B6B",
-};
+const PRODUCT_COLOR_PALETTE = [
+  "#00D4FF",
+  "#B794F4",
+  "#00E5A0",
+  "#FFB830",
+  "#FF6B6B",
+  "#7B5EA7",
+  "#4BD1A0",
+];
+function productColor(index: number): string {
+  return PRODUCT_COLOR_PALETTE[index % PRODUCT_COLOR_PALETTE.length];
+}
 
 const TYPE_META: Record<
   RevenueType,
@@ -45,6 +51,8 @@ export function RevenuePanel({ userId, readonly }: Props) {
   const { records } = useSalesRecords(userId, YEAR);
   const { targets } = useRevenueTargets(userId, YEAR);
   const { customers } = useCustomers(userId);
+  const { products } = useProducts();
+  const productNames = products.map((p) => p.name);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SalesRecord | null>(null);
@@ -53,8 +61,11 @@ export function RevenuePanel({ userId, readonly }: Props) {
   const [selectedCell, setSelectedCell] = useState<CellKey | null>(null);
 
   const aggregates = useMemo(() => {
+    // 登録済商材 + レコードに出現する過去商材（削除された商材も表示するため）
+    const historicalNames = Array.from(new Set(records.map((r) => r.productName)));
+    const allNames = Array.from(new Set([...productNames, ...historicalNames]));
     const byCell: Record<string, Record<RevenueType, Record<number, number>>> = {};
-    for (const p of PRODUCTS) {
+    for (const p of allNames) {
       byCell[p] = { stock: {}, shot: {} };
       for (const m of MONTHS) {
         byCell[p].stock[m] = 0;
@@ -62,7 +73,13 @@ export function RevenuePanel({ userId, readonly }: Props) {
       }
     }
     for (const r of records) {
-      if (!byCell[r.productName]) continue;
+      if (!byCell[r.productName]) {
+        byCell[r.productName] = { stock: {}, shot: {} };
+        for (const m of MONTHS) {
+          byCell[r.productName].stock[m] = 0;
+          byCell[r.productName].shot[m] = 0;
+        }
+      }
       byCell[r.productName][r.revenueType][r.month] =
         (byCell[r.productName][r.revenueType][r.month] ?? 0) + r.amount;
     }
@@ -74,7 +91,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
     let yearTotal = 0;
     let stockYear = 0;
     let shotYear = 0;
-    for (const p of PRODUCTS) {
+    for (const p of allNames) {
       productTotals[p] = { stock: 0, shot: 0, total: 0 };
       for (const m of MONTHS) {
         const s = byCell[p].stock[m];
@@ -88,8 +105,8 @@ export function RevenuePanel({ userId, readonly }: Props) {
         shotYear += sh;
       }
     }
-    return { byCell, monthTotals, productTotals, yearTotal, stockYear, shotYear };
-  }, [records]);
+    return { byCell, monthTotals, productTotals, yearTotal, stockYear, shotYear, allNames };
+  }, [records, productNames]);
 
   const yearTarget = Object.values(targets.monthly).reduce((a, b) => a + b, 0);
   const achievement =
@@ -275,8 +292,8 @@ export function RevenuePanel({ userId, readonly }: Props) {
             </tr>
           </thead>
           <tbody>
-            {PRODUCTS.map((p) => {
-              const pColor = PRODUCT_COLORS[p];
+            {aggregates.allNames.map((p, i) => {
+              const pColor = productColor(i);
               const pTotal = aggregates.productTotals[p];
               return (
                 <Fragment key={p}>

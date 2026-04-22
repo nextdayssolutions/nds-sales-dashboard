@@ -4,8 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Customer, CustomerStatus } from "@/types";
-import { PRODUCTS } from "@/lib/mock-data";
 import { useCustomers } from "@/lib/customer-store";
+import { useProducts } from "@/lib/products-store";
 import { RelationDots } from "@/components/common/RelationDots";
 
 interface Props {
@@ -40,6 +40,7 @@ const empty = (ownerId: number): Omit<Customer, "id"> => ({
 
 export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
   const { addCustomer, updateCustomer, deleteCustomer } = useCustomers();
+  const { products } = useProducts();
   const [draft, setDraft] = useState<Omit<Customer, "id">>(() => empty(ownerId));
 
   useEffect(() => {
@@ -246,26 +247,32 @@ export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
             <div className="mb-2 text-[10px] uppercase tracking-wider text-white/40">
               導入商材（複数選択可）
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {PRODUCTS.map((p) => {
-                const selected = draft.products.includes(p);
-                return (
-                  <button
-                    type="button"
-                    key={p}
-                    onClick={() => toggleProduct(p)}
-                    className="rounded-lg border px-2.5 py-1 text-[12px] transition"
-                    style={{
-                      background: selected ? "rgba(0,212,255,0.15)" : "rgba(255,255,255,0.02)",
-                      borderColor: selected ? "rgba(0,212,255,0.4)" : "rgba(255,255,255,0.1)",
-                      color: selected ? "#00D4FF" : "rgba(255,255,255,0.55)",
-                    }}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
+            {products.length === 0 ? (
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/40">
+                商材が登録されていません。管理者画面の「商材管理」から追加してください。
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {products.map((p) => {
+                  const selected = draft.products.includes(p.name);
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => toggleProduct(p.name)}
+                      className="rounded-lg border px-2.5 py-1 text-[12px] transition"
+                      style={{
+                        background: selected ? "rgba(0,212,255,0.15)" : "rgba(255,255,255,0.02)",
+                        borderColor: selected ? "rgba(0,212,255,0.4)" : "rgba(255,255,255,0.1)",
+                        color: selected ? "#00D4FF" : "rgba(255,255,255,0.55)",
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="mt-5">

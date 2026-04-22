@@ -1,8 +1,9 @@
 "use client";
 
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Users, Crown, ShieldCheck, type LucideIcon } from "lucide-react";
+import { LogIn, Users, Crown, ShieldCheck, type LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { DEFAULT_SESSIONS, setMockSession } from "@/lib/session";
 import { MOCK_USERS } from "@/lib/mock-data";
@@ -46,14 +47,40 @@ const ROLES: {
   },
 ];
 
+const isDev = process.env.NODE_ENV !== "production";
+
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSubmitting(true);
+    // Phase B で Supabase Auth に差し替え。現状は mock で email 一致ユーザーとしてログイン
+    const user = MOCK_USERS.find((u) => u.email === email.trim().toLowerCase());
+    setTimeout(() => {
+      setSubmitting(false);
+      if (!user) {
+        toast.error("そのメールアドレスのアカウントが見つかりません");
+        return;
+      }
+      if (!password) {
+        toast.error("パスワードを入力してください");
+        return;
+      }
+      setMockSession({ userId: user.id, role: user.role });
+      toast.success(`${user.name} としてログインしました`);
+      router.push(user.role === "admin" ? "/admin" : "/dashboard");
+    }, 400);
+  };
 
   const signInAs = (role: UserRole, path: string) => {
     const session = DEFAULT_SESSIONS[role];
     const user = MOCK_USERS.find((u) => u.id === session.userId);
     setMockSession(session);
-    toast.success(`${user?.name ?? ""}（${role}）としてログインしました`);
+    toast.success(`${user?.name ?? ""} としてログイン（モック）`);
     router.push(path);
   };
 
@@ -69,80 +96,90 @@ export default function LoginPage() {
               営業ダッシュボード
             </h1>
             <p className="mt-3 text-sm text-white/50">
-              Google Workspace アカウントでログインしてください
+              メールアドレスとパスワードを入力してログイン
             </p>
           </div>
 
-          <button
-            onClick={() => signInAs("member", "/dashboard")}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
-          >
-            <GoogleIcon />
-            Google でログイン
-          </button>
+          <form onSubmit={onSubmit} className="flex flex-col gap-3">
+            <label className="block">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                メールアドレス
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tanaka@example.co.jp"
+                required
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
+              />
+            </label>
+            <label className="block">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                パスワード
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-[13px] text-white outline-none focus:border-cyan/40"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-2 flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-bold text-white shadow-[0_4px_20px_rgba(0,212,255,0.3)] transition disabled:opacity-60"
+              style={{
+                background: "linear-gradient(135deg, #00D4FF 0%, #7B5EA7 100%)",
+              }}
+            >
+              <LogIn size={14} />
+              {submitting ? "確認中..." : "ログイン"}
+            </button>
+          </form>
 
           <div className="mt-6 rounded-xl border border-cyan/20 bg-cyan/[0.06] p-4 text-[11px] leading-relaxed text-white/60">
-            💡 パスワード認証は無効化されています。管理者から招待メールを受け取った後、同じ Google アカウントでログインしてください。
+            💡 アカウントは管理者が発行します。初期パスワードを受け取ったら、設定画面でいつでも変更できます。
           </div>
 
-          <div className="mt-6 border-t border-white/10 pt-5">
-            <div className="mb-3 text-[10px] uppercase tracking-wider text-white/30">
-              🧪 モック用クイック切替（開発中）
-            </div>
-            <div className="flex flex-col gap-2">
-              {ROLES.map((r) => {
-                const Icon = r.icon;
-                return (
-                  <button
-                    key={r.role}
-                    onClick={() => signInAs(r.role, r.path)}
-                    className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-left transition hover:bg-white/[0.05]"
-                    style={{ borderColor: "rgba(255,255,255,0.1)" }}
-                  >
-                    <div
-                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
-                      style={{ background: r.tint, color: r.color }}
+          {isDev && (
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-3 text-[10px] uppercase tracking-wider text-white/30">
+                🧪 開発用クイック切替
+              </div>
+              <div className="flex flex-col gap-2">
+                {ROLES.map((r) => {
+                  const Icon = r.icon;
+                  return (
+                    <button
+                      key={r.role}
+                      onClick={() => signInAs(r.role, r.path)}
+                      className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-left transition hover:bg-white/[0.05]"
                     >
-                      <Icon size={14} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold" style={{ color: r.color }}>
-                        {r.label}
+                      <div
+                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
+                        style={{ background: r.tint, color: r.color }}
+                      >
+                        <Icon size={14} />
                       </div>
-                      <div className="mt-0.5 text-[10px] text-white/40">
-                        {r.desc}
+                      <div className="flex-1">
+                        <div className="text-xs font-semibold" style={{ color: r.color }}>
+                          {r.label}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-white/40">
+                          {r.desc}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </AppShell>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.65l-3.57-2.77c-.99.66-2.25 1.05-3.71 1.05-2.86 0-5.29-1.93-6.15-4.53H2.17v2.84A10.98 10.98 0 0 0 12 23Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.85 14.1c-.22-.66-.34-1.36-.34-2.1s.12-1.44.34-2.1V7.06H2.17A10.98 10.98 0 0 0 1 12c0 1.77.42 3.45 1.17 4.94l3.68-2.84Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.07.56 4.22 1.65l3.16-3.16C17.45 2.1 14.97 1 12 1 7.7 1 3.99 3.47 2.17 7.06l3.68 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
-      />
-    </svg>
   );
 }

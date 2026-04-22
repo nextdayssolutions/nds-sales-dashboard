@@ -123,7 +123,6 @@ function TeamBody() {
                   <tr className="text-left text-[11px] text-white/40">
                     <th className="px-3 pb-2">メンバー</th>
                     <th className="px-3 pb-2">部署 / 役職</th>
-                    <th className="px-3 pb-2">ステータス</th>
                     <th className="px-3 pb-2">達成率</th>
                     <th className="px-3 pb-2">担当</th>
                     <th className="px-3 pb-2">今月売上</th>

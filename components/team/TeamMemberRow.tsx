@@ -1,22 +1,9 @@
 "use client";
 
 import { BookOpen, X } from "lucide-react";
-import type { UserRecord, UserStatus } from "@/types";
+import type { UserRecord } from "@/types";
 import { fmt, fmtFull } from "@/lib/utils";
 import { useSheet } from "@/lib/sheet-storage";
-
-const statusLabel: Record<UserStatus, string> = {
-  active: "アクティブ",
-  invited: "招待中",
-  suspended: "停止中",
-  retired: "退職",
-};
-const statusColor: Record<UserStatus, string> = {
-  active: "#00E5A0",
-  invited: "#FFB830",
-  suspended: "#FF6B6B",
-  retired: "rgba(255,255,255,0.3)",
-};
 
 interface RowProps {
   member: UserRecord;
@@ -42,21 +29,6 @@ export function TeamMemberRow({ member, onClick, selected }: RowProps) {
       <td className="px-3 py-3.5">
         <div className="text-xs text-white/70">{member.dept}</div>
         <div className="mt-0.5 text-[11px] text-white/35">{member.title}</div>
-      </td>
-      <td className="px-3 py-3.5">
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px]"
-          style={{
-            background: `${statusColor[member.status]}15`,
-            color: statusColor[member.status],
-          }}
-        >
-          <div
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ background: statusColor[member.status] }}
-          />
-          {statusLabel[member.status]}
-        </span>
       </td>
       <td className="px-3 py-3.5">
         {member.achievement !== null ? (

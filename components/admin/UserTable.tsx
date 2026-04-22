@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Search, Download } from "lucide-react";
 import { MOCK_USERS } from "@/lib/mock-data";
-import type { UserRecord, UserRole, UserStatus } from "@/types";
+import type { UserRecord, UserRole } from "@/types";
 import { UserDetailModal } from "./UserDetailModal";
 import { UserRowProgress } from "./UserRowProgress";
 
@@ -16,18 +16,6 @@ const roleColor: Record<UserRole, string> = {
   admin: "#FF6B6B",
   manager: "#FFB830",
   member: "#00D4FF",
-};
-const statusLabel: Record<UserStatus, string> = {
-  active: "アクティブ",
-  invited: "招待中",
-  suspended: "停止中",
-  retired: "退職",
-};
-const statusColor: Record<UserStatus, string> = {
-  active: "#00E5A0",
-  invited: "#FFB830",
-  suspended: "#FF6B6B",
-  retired: "rgba(255,255,255,0.3)",
 };
 
 export function UserTable() {
@@ -80,10 +68,9 @@ export function UserTable() {
             <tr className="text-left text-[11px] text-white/40">
               <th className="px-3 pb-2">従業員</th>
               <th className="px-3 pb-2">部署 / ロール</th>
-              <th className="px-3 pb-2">ステータス</th>
               <th className="px-3 pb-2">達成率</th>
               <th className="px-3 pb-2">担当</th>
-              <th className="px-3 pb-2">育成進捗</th>
+              <th className="px-3 pb-2">育成計画進捗</th>
               <th className="px-3 pb-2">最終1on1</th>
               <th className="px-3 pb-2">最終ログイン</th>
               <th className="px-3 pb-2"></th>
@@ -107,21 +94,6 @@ export function UserTable() {
                     }}
                   >
                     {roleLabel[u.role]}
-                  </span>
-                </td>
-                <td className="px-3 py-3.5">
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px]"
-                    style={{
-                      background: `${statusColor[u.status]}15`,
-                      color: statusColor[u.status],
-                    }}
-                  >
-                    <div
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ background: statusColor[u.status] }}
-                    />
-                    {statusLabel[u.status]}
                   </span>
                 </td>
                 <td className="px-3 py-3.5">

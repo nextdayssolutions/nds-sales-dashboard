@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, ShieldCheck, Users, ClipboardList, BarChart3, Lock, type LucideIcon } from "lucide-react";
+import { Plus, ShieldCheck, Users, Package, BarChart3, Lock, type LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { RoleNav } from "@/components/layout/RoleNav";
 import { RoleGuard } from "@/components/layout/RoleGuard";
 import { UserTable } from "@/components/admin/UserTable";
 import { InviteModal } from "@/components/admin/InviteModal";
+import { ProductsTable } from "@/components/admin/ProductsTable";
 import { MOCK_USERS } from "@/lib/mock-data";
 import { useMockSession } from "@/lib/session";
+import { fmt } from "@/lib/utils";
 
-type TabId = "users" | "sheets" | "analytics" | "audit";
+type TabId = "users" | "products" | "analytics" | "audit";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "users", label: "従業員管理", icon: Users },
-  { id: "sheets", label: "シート配布", icon: ClipboardList },
+  { id: "products", label: "商材管理", icon: Package },
   { id: "analytics", label: "全社分析", icon: BarChart3 },
   { id: "audit", label: "監査ログ", icon: Lock },
 ];
@@ -36,8 +38,8 @@ function AdminBody() {
   const withAch = MOCK_USERS.filter((u) => u.achievement !== null);
   const stats = {
     total: MOCK_USERS.length,
-    active: MOCK_USERS.filter((u) => u.status === "active").length,
-    invited: MOCK_USERS.filter((u) => u.status === "invited").length,
+    totalMonthRevenue: MOCK_USERS.reduce((s, u) => s + (u.monthRevenue ?? 0), 0),
+    totalCustomers: MOCK_USERS.reduce((s, u) => s + (u.customers ?? 0), 0),
     avgAchievement:
       withAch.length > 0
         ? Math.round(
@@ -79,8 +81,8 @@ function AdminBody() {
       <div className="mb-6 grid grid-cols-2 gap-3.5 md:grid-cols-4">
         {[
           { label: "総従業員数", value: stats.total, sub: "全ロール合計", color: "#00D4FF" },
-          { label: "アクティブ", value: stats.active, sub: "ログイン可能", color: "#00E5A0" },
-          { label: "招待中", value: stats.invited, sub: "未ログイン", color: "#FFB830" },
+          { label: "合計月商", value: fmt(stats.totalMonthRevenue), sub: "全社今月売上", color: "#00E5A0" },
+          { label: "合計担当顧客", value: `${stats.totalCustomers}社`, sub: "全社合算", color: "#FFB830" },
           {
             label: "平均達成率",
             value: `${stats.avgAchievement}%`,
@@ -126,7 +128,8 @@ function AdminBody() {
       </div>
 
       {tab === "users" && <UserTable />}
-      {tab !== "users" && (
+      {tab === "products" && <ProductsTable />}
+      {(tab === "analytics" || tab === "audit") && (
         <div className="rounded-3xl border border-white/7 bg-white/[0.03] p-16 text-center text-white/30">
           <div className="mb-3 text-4xl">🚧</div>
           <div className="text-[13px]">このタブは開発中です</div>

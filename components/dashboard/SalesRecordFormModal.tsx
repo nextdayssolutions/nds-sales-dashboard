@@ -4,9 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { X, Trash2, Package, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { RevenueType, SalesRecord } from "@/types";
-import { PRODUCTS } from "@/lib/mock-data";
 import { useSalesRecords } from "@/lib/sales-store";
 import { useCustomers } from "@/lib/customer-store";
+import { useProducts } from "@/lib/products-store";
 import { fmtFull } from "@/lib/utils";
 
 interface Props {
@@ -25,9 +25,9 @@ const REVENUE_TYPES: { key: RevenueType; label: string; desc: string; color: str
   { key: "shot", label: "ショット", desc: "一時的売上・初期費用など", color: "#FFB830", icon: Package },
 ];
 
-const emptyDraft = (ownerId: number, year: number): DraftRecord => ({
+const emptyDraft = (ownerId: number, year: number, firstProduct: string): DraftRecord => ({
   ownerId,
-  productName: PRODUCTS[0],
+  productName: firstProduct,
   revenueType: "stock",
   amount: 0,
   year,
@@ -46,7 +46,9 @@ export function SalesRecordFormModal({
 }: Props) {
   const { addRecord, updateRecord, deleteRecord } = useSalesRecords();
   const { customers } = useCustomers(ownerId);
-  const [draft, setDraft] = useState<DraftRecord>(() => emptyDraft(ownerId, year));
+  const { products } = useProducts();
+  const firstProduct = products[0]?.name ?? "";
+  const [draft, setDraft] = useState<DraftRecord>(() => emptyDraft(ownerId, year, firstProduct));
 
   useEffect(() => {
     if (editing) {
@@ -56,15 +58,15 @@ export function SalesRecordFormModal({
       setDraft(rest);
     } else if (prefill) {
       setDraft({
-        ...emptyDraft(ownerId, year),
+        ...emptyDraft(ownerId, year, firstProduct),
         ...(prefill.productName ? { productName: prefill.productName } : {}),
         ...(prefill.month ? { month: prefill.month } : {}),
         ...(prefill.revenueType ? { revenueType: prefill.revenueType } : {}),
       });
     } else {
-      setDraft(emptyDraft(ownerId, year));
+      setDraft(emptyDraft(ownerId, year, firstProduct));
     }
-  }, [editing, prefill, ownerId, year, open]);
+  }, [editing, prefill, ownerId, year, open, firstProduct]);
 
   if (!open) return null;
 
@@ -126,27 +128,33 @@ export function SalesRecordFormModal({
             <div className="mb-2 text-[10px] uppercase tracking-wider text-white/40">
               商材
             </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {PRODUCTS.map((p) => {
-                const active = draft.productName === p;
-                return (
-                  <button
-                    type="button"
-                    key={p}
-                    onClick={() => setDraft({ ...draft, productName: p })}
-                    className="rounded-lg border px-2.5 py-2 text-[12px] transition"
-                    style={{
-                      background: active ? "rgba(0,212,255,0.15)" : "rgba(255,255,255,0.03)",
-                      borderColor: active ? "rgba(0,212,255,0.4)" : "rgba(255,255,255,0.1)",
-                      color: active ? "#00D4FF" : "rgba(255,255,255,0.55)",
-                      fontWeight: active ? 700 : 500,
-                    }}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
+            {products.length === 0 ? (
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-white/40">
+                商材が登録されていません。管理者画面の「商材管理」から追加してください。
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5">
+                {products.map((p) => {
+                  const active = draft.productName === p.name;
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => setDraft({ ...draft, productName: p.name })}
+                      className="rounded-lg border px-2.5 py-2 text-[12px] transition"
+                      style={{
+                        background: active ? "rgba(0,212,255,0.15)" : "rgba(255,255,255,0.03)",
+                        borderColor: active ? "rgba(0,212,255,0.4)" : "rgba(255,255,255,0.1)",
+                        color: active ? "#00D4FF" : "rgba(255,255,255,0.55)",
+                        fontWeight: active ? 700 : 500,
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="mb-5">

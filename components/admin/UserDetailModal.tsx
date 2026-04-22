@@ -10,7 +10,7 @@ import {
   BookOpen,
   type LucideIcon,
 } from "lucide-react";
-import type { UserRecord, UserRole, UserStatus } from "@/types";
+import type { UserRecord, UserRole } from "@/types";
 import { CRMPanel } from "@/components/dashboard/CRMPanel";
 import { SchedulePanel } from "@/components/dashboard/SchedulePanel";
 import { RevenuePanel } from "@/components/dashboard/RevenuePanel";
@@ -29,7 +29,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "info", label: "基本情報", icon: User },
   { id: "crm", label: "CRM", icon: Users },
   { id: "schedule", label: "スケジュール", icon: Calendar },
-  { id: "revenue", label: "売上", icon: TrendingUp },
+  { id: "revenue", label: "売上管理", icon: TrendingUp },
   { id: "sheets", label: "自己管理", icon: BookOpen },
 ];
 
@@ -43,19 +43,6 @@ const roleColor: Record<UserRole, string> = {
   manager: "#FFB830",
   member: "#00D4FF",
 };
-const statusLabel: Record<UserStatus, string> = {
-  active: "アクティブ",
-  invited: "招待中",
-  suspended: "停止中",
-  retired: "退職",
-};
-const statusColor: Record<UserStatus, string> = {
-  active: "#00E5A0",
-  invited: "#FFB830",
-  suspended: "#FF6B6B",
-  retired: "rgba(255,255,255,0.3)",
-};
-
 export function UserDetailModal({ target, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("info");
   if (!target) return null;
@@ -152,11 +139,6 @@ export function UserDetailModal({ target, onClose }: Props) {
                   label: "ロール",
                   value: roleLabel[target.role],
                   color: roleColor[target.role],
-                },
-                {
-                  label: "ステータス",
-                  value: statusLabel[target.status],
-                  color: statusColor[target.status],
                 },
                 { label: "部署", value: target.dept },
                 { label: "役職", value: target.title ?? "—" },

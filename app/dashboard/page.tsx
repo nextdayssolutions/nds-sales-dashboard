@@ -127,7 +127,7 @@ function DashboardBody() {
       <MemberDashboardTabs userId={user.id} />
 
       <div className="mt-5 text-center text-[11px] text-white/20">
-        Sales Dashboard v1.0 · 本番環境では Google Calendar / Sheets API と接続
+        Sales Dashboard v1.0
       </div>
     </AppShell>
   );
