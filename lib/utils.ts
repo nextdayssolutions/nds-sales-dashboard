@@ -5,7 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const fmt = (n: number) => (n === 0 ? "—" : `¥${(n / 10000).toFixed(0)}万`);
+export const fmt = (n: number) => {
+  if (n === 0) return "—";
+  const man = n / 10000;
+  // 整数の場合は小数点を省略、非整数なら小数第1位まで表示
+  const s = Number.isInteger(man) ? man.toFixed(0) : man.toFixed(1);
+  return `¥${s}万`;
+};
 
 export const fmtFull = (n: number) => `¥${n.toLocaleString()}`;
 
