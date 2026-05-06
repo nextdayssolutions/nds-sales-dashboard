@@ -4,10 +4,63 @@ import { FormEvent, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LogIn } from "lucide-react";
+import {
+  LogIn,
+  ShieldCheck,
+  Crown,
+  Users,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/types";
+
+// ─── DEV ONLY: ロール別クイックログイン ─────────────────────
+// .env.local で各ロールのメール / パスワードを設定すると、
+// dev 環境（npm run dev）でのみログイン画面下部にショートカットが出る。
+// production ビルド (NODE_ENV === "production") では一切レンダリングされない。
+const isDevEnv = process.env.NODE_ENV !== "production";
+
+interface DevRole {
+  role: UserRole;
+  label: string;
+  color: string;
+  icon: LucideIcon;
+  email?: string;
+  password?: string;
+}
+
+const DEV_ROLES: DevRole[] = isDevEnv
+  ? [
+      {
+        role: "admin",
+        label: "管理者",
+        color: "#FF6B6B",
+        icon: ShieldCheck,
+        email: process.env.NEXT_PUBLIC_DEV_QUICK_LOGIN_ADMIN_EMAIL,
+        password: process.env.NEXT_PUBLIC_DEV_QUICK_LOGIN_ADMIN_PASSWORD,
+      },
+      {
+        role: "manager",
+        label: "マネージャー",
+        color: "#FFB830",
+        icon: Crown,
+        email: process.env.NEXT_PUBLIC_DEV_QUICK_LOGIN_MANAGER_EMAIL,
+        password: process.env.NEXT_PUBLIC_DEV_QUICK_LOGIN_MANAGER_PASSWORD,
+      },
+      {
+        role: "member",
+        label: "従業員",
+        color: "#00D4FF",
+        icon: Users,
+        email: process.env.NEXT_PUBLIC_DEV_QUICK_LOGIN_MEMBER_EMAIL,
+        password: process.env.NEXT_PUBLIC_DEV_QUICK_LOGIN_MEMBER_PASSWORD,
+      },
+    ]
+  : [];
+
+const hasAnyDevRole = DEV_ROLES.some((r) => r.email);
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,14 +68,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const performSignIn = async (rawEmail: string, rawPassword: string) => {
     setSubmitting(true);
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+        email: rawEmail.trim().toLowerCase(),
+        password: rawPassword,
       });
       if (error || !data.user) {
         const msg =
@@ -40,7 +92,7 @@ export default function LoginPage() {
         .maybeSingle<{ full_name: string; role: UserRole }>();
 
       const role: UserRole = profile?.role ?? "member";
-      toast.success(`${profile?.full_name ?? email} としてログインしました`);
+      toast.success(`${profile?.full_name ?? rawEmail} としてログインしました`);
       router.push(role === "admin" ? "/admin" : "/dashboard");
       router.refresh();
     } catch (err) {
@@ -48,6 +100,24 @@ export default function LoginPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await performSignIn(email, password);
+  };
+
+  const onQuickLogin = async (devRole: DevRole) => {
+    if (!devRole.email) return;
+    if (!devRole.password) {
+      // パスワード未設定の場合はメールだけ自動入力
+      setEmail(devRole.email);
+      toast.info(`${devRole.email} を入力しました。パスワードを手動入力してください。`);
+      return;
+    }
+    setEmail(devRole.email);
+    setPassword(devRole.password);
+    await performSignIn(devRole.email, devRole.password);
   };
 
   return (
@@ -175,6 +245,71 @@ export default function LoginPage() {
               <div className="mt-6 rounded-xl border border-amber/15 bg-amber/[0.04] p-3.5 text-[11px] leading-relaxed text-white/60">
                 💡 アカウントは管理者が発行します。初期パスワードを受け取ったら、設定画面でいつでも変更できます。
               </div>
+
+              {/* ── DEV ONLY: ロール別クイックログイン ──────────── */}
+              {isDevEnv && hasAnyDevRole && (
+                <div
+                  className="mt-5 rounded-xl border p-3.5"
+                  style={{
+                    background: "rgba(123,94,167,0.08)",
+                    borderColor: "rgba(123,94,167,0.3)",
+                  }}
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple">
+                      <Zap size={11} />
+                      DEV — ロール別クイックログイン
+                    </div>
+                    <span className="rounded-full border border-purple/30 bg-purple/10 px-1.5 py-0.5 text-[9px] font-bold text-purple">
+                      開発環境のみ
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {DEV_ROLES.map((r) => {
+                      const Icon = r.icon;
+                      const configured = !!r.email;
+                      const fullCreds = !!(r.email && r.password);
+                      return (
+                        <button
+                          key={r.role}
+                          type="button"
+                          onClick={() => onQuickLogin(r)}
+                          disabled={!configured || submitting}
+                          className="flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-30"
+                          style={{
+                            background: configured
+                              ? `${r.color}10`
+                              : "rgba(255,255,255,0.02)",
+                            borderColor: configured
+                              ? `${r.color}40`
+                              : "rgba(255,255,255,0.08)",
+                            color: configured ? r.color : "rgba(255,255,255,0.4)",
+                          }}
+                          title={
+                            !configured
+                              ? `${r.label} の email を NEXT_PUBLIC_DEV_QUICK_LOGIN_${r.role.toUpperCase()}_EMAIL に設定してください`
+                              : fullCreds
+                                ? `${r.email} で即ログイン`
+                                : `${r.email} を自動入力（パスワードは手動）`
+                          }
+                        >
+                          <Icon size={14} />
+                          <span>{r.label}</span>
+                          {configured && !fullCreds && (
+                            <span className="text-[8px] font-medium opacity-70">
+                              (email のみ)
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 text-[9px] leading-relaxed text-white/40">
+                    `.env.local` の `NEXT_PUBLIC_DEV_QUICK_LOGIN_*_EMAIL` /
+                    `_PASSWORD` を設定するとボタンが有効化されます。本番ビルドには露出しません。
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
