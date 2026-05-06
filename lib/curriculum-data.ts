@@ -1,9 +1,10 @@
 import type {
-  CareerStage,
   CategoryItem,
   CurriculumStep,
+  DailySheet,
   DevelopmentSheet,
   GoalSheet,
+  GoalWish,
   OneOnOneSheet,
   VisionSheet,
   WishPeriod,
@@ -103,6 +104,25 @@ export const CURRICULUM_PERIODS = [
   "随時",
 ] as const;
 
+/** 全員共通レール（〜1ヶ月半まで）。タイトル/内容は固定 */
+export const COMMON_CURRICULUM_PERIODS: readonly string[] = [
+  "入社〜1週間",
+  "1ヶ月 (入社30日)",
+  "〜45日 (1ヶ月半)",
+];
+
+/** カスタマイズ可能（2ヶ月以降）。管理者が項目のタイトル/内容編集・追加・削除可 */
+export const CUSTOM_CURRICULUM_PERIODS: readonly string[] = [
+  "〜60日 (2ヶ月終わり)",
+  "3ヶ月",
+  "6ヶ月",
+  "随時",
+];
+
+export function isCustomPeriod(period: string): boolean {
+  return CUSTOM_CURRICULUM_PERIODS.includes(period);
+}
+
 export const WISH_PERIODS: WishPeriod[] = [
   "1ヶ月後",
   "2ヶ月後",
@@ -114,8 +134,6 @@ export const WISH_PERIODS: WishPeriod[] = [
   "5年後",
   "未来",
 ];
-
-export const CAREER_STAGES: CareerStage[] = ["プレーヤー", "主任", "課長", "部長", "役員"];
 
 // ───────── デフォルトシート生成 ─────────
 
@@ -136,11 +154,8 @@ export const emptyGoal = (): GoalSheet => ({
   dueDate: "",
   age: "",
   wishes: Object.fromEntries(
-    WISH_PERIODS.map((p) => [p, { content: "", url: "" }])
-  ) as Record<WishPeriod, { content: string; url: string }>,
-  career: Object.fromEntries(
-    CAREER_STAGES.map((s) => [s, { income: "", requiredSkills: "" }])
-  ) as Record<CareerStage, { income: string; requiredSkills: string }>,
+    WISH_PERIODS.map((p) => [p, { content: "", monthlyIncome: "", pdca: "" }]),
+  ) as Record<WishPeriod, GoalWish>,
 });
 
 export const emptyDevelopment = (): DevelopmentSheet => ({
@@ -157,6 +172,8 @@ export const emptyDevelopment = (): DevelopmentSheet => ({
 
 export const emptyOneOnOne = (): OneOnOneSheet => ({ entries: [] });
 
+export const emptyDaily = (): DailySheet => ({ entries: [] });
+
 export const CATEGORY_LABELS = {
   mind: "マインド面",
   portable: "ポータブルスキル面",
@@ -164,9 +181,10 @@ export const CATEGORY_LABELS = {
 } as const;
 
 export const SHEET_META: Record<
-  "vision" | "goal" | "development" | "oneonone",
+  "daily" | "vision" | "goal" | "development" | "oneonone",
   { label: string; color: string; tint: string; emoji: string }
 > = {
+  daily: { label: "日報", color: "#00E5A0", tint: "rgba(0,229,160,0.12)", emoji: "📝" },
   vision: { label: "理念・ビジョン", color: "#FFB07A", tint: "rgba(255,176,122,0.12)", emoji: "🟠" },
   goal: { label: "目標設定", color: "#00D4FF", tint: "rgba(0,212,255,0.12)", emoji: "🔵" },
   development: { label: "育成計画", color: "#E5E5E5", tint: "rgba(255,255,255,0.08)", emoji: "⚪" },

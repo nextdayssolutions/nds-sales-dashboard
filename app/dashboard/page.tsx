@@ -60,7 +60,7 @@ function DashboardBody() {
       color: metrics.monthRevenue > 0 ? monthAchColor : "#B794F4",
     },
     {
-      label: "今月の歩合",
+      label: "来月の支給歩合",
       value: metrics.monthCommission > 0 ? fmt(metrics.monthCommission) : "—",
       sub:
         metrics.yearCommission > 0

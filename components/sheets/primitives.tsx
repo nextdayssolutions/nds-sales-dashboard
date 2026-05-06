@@ -80,7 +80,10 @@ export function EvalCheck({
       onClick={() => !disabled && onChange?.(!checked)}
       disabled={disabled}
       className="flex items-center gap-1.5 text-[11px] transition disabled:cursor-not-allowed"
-      style={{ color: checked ? color : "rgba(255,255,255,0.4)" }}
+      style={{
+        color: checked ? color : "rgba(255,255,255,0.4)",
+        opacity: disabled ? 0.55 : 1,
+      }}
     >
       <span
         className="flex h-4 w-4 items-center justify-center rounded border-[1.5px] transition-colors"

@@ -29,6 +29,7 @@ interface CustomerRow {
   status: DbStatus;
   relation_score: number | null;
   last_contact_at: string | null;
+  next_appointment_at: string | null;
   product_names: string[];
   annual_revenue: number;
   memo: string | null;
@@ -50,6 +51,7 @@ function rowToCustomer(row: CustomerRow): Customer {
     lastContact: row.last_contact_at ?? "",
     revenue: row.annual_revenue,
     status: STATUS_FROM_DB[row.status],
+    nextAppointment: row.next_appointment_at ?? undefined,
     memo: row.memo ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -67,6 +69,7 @@ function customerToInsert(c: Omit<Customer, "id">) {
     status: STATUS_TO_DB[c.status],
     relation_score: c.relation,
     last_contact_at: c.lastContact || null,
+    next_appointment_at: c.nextAppointment || null,
     product_names: c.products ?? [],
     annual_revenue: c.revenue ?? 0,
     memo: c.memo || null,
@@ -84,6 +87,8 @@ function customerToUpdate(patch: Partial<Customer>) {
   if (patch.status !== undefined) out.status = STATUS_TO_DB[patch.status];
   if (patch.relation !== undefined) out.relation_score = patch.relation;
   if (patch.lastContact !== undefined) out.last_contact_at = patch.lastContact || null;
+  if (patch.nextAppointment !== undefined)
+    out.next_appointment_at = patch.nextAppointment || null;
   if (patch.products !== undefined) out.product_names = patch.products;
   if (patch.revenue !== undefined) out.annual_revenue = patch.revenue;
   if (patch.memo !== undefined) out.memo = patch.memo || null;
@@ -103,7 +108,7 @@ async function fetchAll(): Promise<Customer[]> {
   const { data, error } = await supabase
     .from("customers")
     .select(
-      "id, owner_id, company_name, contact_name, contact_email, contact_phone, industry, status, relation_score, last_contact_at, product_names, annual_revenue, memo, created_at, updated_at",
+      "id, owner_id, company_name, contact_name, contact_email, contact_phone, industry, status, relation_score, last_contact_at, next_appointment_at, product_names, annual_revenue, memo, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
   if (error) {

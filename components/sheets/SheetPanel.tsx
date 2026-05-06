@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { SheetKind } from "@/types";
 import { SHEET_META } from "@/lib/curriculum-data";
+import { DailySheetPanel } from "./DailySheet";
 import { VisionSheetPanel } from "./VisionSheet";
 import { GoalSheetPanel } from "./GoalSheet";
 import { DevelopmentSheetPanel } from "./DevelopmentSheet";
@@ -17,9 +18,9 @@ interface Props {
   defaultKind?: SheetKind;
 }
 
-const KINDS: SheetKind[] = ["vision", "goal", "development", "oneonone"];
+const KINDS: SheetKind[] = ["daily", "vision", "goal", "development", "oneonone"];
 
-export function SheetPanel({ userId, readonly, trainerMode, defaultKind = "vision" }: Props) {
+export function SheetPanel({ userId, readonly, trainerMode, defaultKind = "daily" }: Props) {
   const [active, setActive] = useState<SheetKind>(defaultKind);
 
   return (
@@ -48,6 +49,13 @@ export function SheetPanel({ userId, readonly, trainerMode, defaultKind = "visio
       </div>
 
       <div key={`${userId}-${active}`} className="animate-fade-up">
+        {active === "daily" && (
+          <DailySheetPanel
+            userId={userId}
+            readonly={readonly}
+            commenterMode={trainerMode}
+          />
+        )}
         {active === "vision" && (
           <VisionSheetPanel userId={userId} readonly={readonly} />
         )}

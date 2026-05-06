@@ -38,8 +38,11 @@ export function CRMPanel({ userId, readonly }: Props) {
     見込み: customers.filter((c) => c.status === "見込み").length,
   };
 
-  // Keep selected in sync when the underlying list mutates (edit/delete)
-  const syncedSelected = selected ? customers.find((c) => c.id === selected.id) ?? null : null;
+  // Keep selected in sync with both list mutations (edit/delete) and filter changes:
+  // 選択中の顧客が現在のフィルタに含まれない場合は詳細パネルを閉じる
+  const syncedSelected = selected
+    ? filtered.find((c) => c.id === selected.id) ?? null
+    : null;
 
   const openNew = () => {
     setEditing(null);
@@ -212,6 +215,31 @@ export function CRMPanel({ userId, readonly }: Props) {
                   <div className="text-[13px] font-semibold text-white">{item.value}</div>
                 </div>
               ))}
+              <div
+                className="col-span-2 rounded-xl border p-3"
+                style={{
+                  background: syncedSelected.nextAppointment
+                    ? "rgba(255,184,48,0.08)"
+                    : "rgba(255,255,255,0.03)",
+                  borderColor: syncedSelected.nextAppointment
+                    ? "rgba(255,184,48,0.3)"
+                    : "rgba(255,255,255,0.07)",
+                }}
+              >
+                <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber/80">
+                  📅 次回アポ日
+                </div>
+                <div
+                  className="text-[14px] font-bold"
+                  style={{
+                    color: syncedSelected.nextAppointment
+                      ? "#FFB830"
+                      : "rgba(255,255,255,0.3)",
+                  }}
+                >
+                  {syncedSelected.nextAppointment || "未設定"}
+                </div>
+              </div>
             </div>
 
             <div className="mb-4">

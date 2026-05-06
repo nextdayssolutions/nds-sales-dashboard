@@ -19,6 +19,12 @@ import {
 import { useSheet } from "@/lib/sheet-storage";
 import { createClient } from "@/lib/supabase/client";
 import { emptyDevelopment } from "@/lib/curriculum-data";
+import {
+  sumActiveAmount,
+  sumActiveCommission,
+  sumYearAmount,
+  sumYearCommission,
+} from "@/lib/sales-recurrence";
 
 // ───────── 定数 ─────────
 /** 現在の年度。実時計ベース — 毎年自動で切り替わる */
@@ -86,25 +92,22 @@ export function calculateUserMetrics(args: {
   targets: RevenueTargets;
   development: DevelopmentSheet;
   oneonone: OneOnOneSheet;
+  /** 集計対象の年（既定: 現在年） */
+  year?: number;
   month?: number;
 }): UserMetrics {
+  const year = args.year ?? CURRENT_YEAR;
   const month = args.month ?? getCurrentMonth();
 
   const existingCount = args.customers.filter((c) => c.status === "既存").length;
   const prospectCount = args.customers.filter((c) => c.status === "商談中").length;
   const leadCount = args.customers.filter((c) => c.status === "見込み").length;
 
-  const monthRevenue = args.records
-    .filter((r) => r.month === month)
-    .reduce((s, r) => s + r.amount, 0);
-  const yearRevenue = args.records.reduce((s, r) => s + r.amount, 0);
-  const monthCommission = args.records
-    .filter((r) => r.month === month)
-    .reduce((s, r) => s + (r.commissionAmount ?? 0), 0);
-  const yearCommission = args.records.reduce(
-    (s, r) => s + (r.commissionAmount ?? 0),
-    0,
-  );
+  // 売上・歩合は stock の自動継続を unfold しながら集計
+  const monthRevenue = sumActiveAmount(args.records, year, month);
+  const yearRevenue = sumYearAmount(args.records, year);
+  const monthCommission = sumActiveCommission(args.records, year, month);
+  const yearCommission = sumYearCommission(args.records, year);
   const monthTarget = args.targets.monthly[month] ?? 0;
   const yearTarget = Object.values(args.targets.monthly).reduce(
     (a, b) => a + b,
@@ -220,19 +223,12 @@ export function useAggregatedMetrics(userIds: string[]): AggregatedMetrics {
       totalCustomers += uCustomers.length;
 
       const uRecords = allRecords.filter((r) => r.ownerId === uid);
-      const uMonthRev = uRecords
-        .filter((r) => r.month === month)
-        .reduce((s, r) => s + r.amount, 0);
-      const uYearRev = uRecords.reduce((s, r) => s + r.amount, 0);
+      const uMonthRev = sumActiveAmount(uRecords, CURRENT_YEAR, month);
+      const uYearRev = sumYearAmount(uRecords, CURRENT_YEAR);
       totalMonthRevenue += uMonthRev;
       totalYearRevenue += uYearRev;
-      totalMonthCommission += uRecords
-        .filter((r) => r.month === month)
-        .reduce((s, r) => s + (r.commissionAmount ?? 0), 0);
-      totalYearCommission += uRecords.reduce(
-        (s, r) => s + (r.commissionAmount ?? 0),
-        0,
-      );
+      totalMonthCommission += sumActiveCommission(uRecords, CURRENT_YEAR, month);
+      totalYearCommission += sumYearCommission(uRecords, CURRENT_YEAR);
 
       const uTarget = targetsByOwner[uid];
       const uMonthTarget = uTarget?.monthly[month] ?? 0;

@@ -59,11 +59,23 @@ function rowToProduct(row: ProductRow): Product {
   };
 }
 
-/** 商材の歩合定義から、売上 1 件分の歩合額を算出 */
-export function computeCommission(product: Product | undefined, saleAmount: number): number {
+/**
+ * 商材の歩合定義から、1 ヶ月あたりの歩合額を算出。
+ *
+ * - rate (%): 売上金額 (amount) × 歩合率
+ * - fixed (円/件): quantity × 固定歩合（個数倍され）
+ *
+ * stock の場合 amount は月額・quantity も「アクティブな間ずっと」適用される個数。
+ * shot の場合は単月の売上に対して 1 度だけ計上される。
+ */
+export function computeCommission(
+  product: Product | undefined,
+  saleAmount: number,
+  quantity: number = 1,
+): number {
   if (!product) return 0;
   if (product.commissionType === "fixed") {
-    return product.commissionFixed;
+    return product.commissionFixed * Math.max(1, quantity);
   }
   return Math.round((saleAmount * product.commissionRate) / 100);
 }

@@ -56,7 +56,8 @@ export function OneOnOneSheetPanel({ userId, readonly, commenterMode }: Props) {
 
   const canAddEntry = !readonly;
   const canEditSelfFields = !readonly;
-  const canEditComment = !readonly || commenterMode;
+  // マネージャーコメントは manager/admin（commenterMode）のみ編集可。本人は閲覧のみ。
+  const canEditComment = !!commenterMode;
 
   const addEntry = () => {
     const entry: OneOnOneEntry = {
@@ -155,7 +156,7 @@ export function OneOnOneSheetPanel({ userId, readonly, commenterMode }: Props) {
                       {entry.date || "日付未入力"}
                     </div>
                     <div className="mt-0.5 truncate text-[11px] text-white/40">
-                      {entry.monthlyReflection || "振り返り未記入"}
+                      {entry.monthlyReflection || "PDCA未記入"}
                     </div>
                   </div>
                   {entry.managerComment && (
@@ -192,12 +193,13 @@ export function OneOnOneSheetPanel({ userId, readonly, commenterMode }: Props) {
                     </div>
                     <div className="mb-3 grid grid-cols-2 gap-3">
                       <Field
-                        label="プライベート"
+                        label="プライベートトピック"
                         value={entry.personal}
                         onChange={(v) => updateEntry(entry.id, { personal: v })}
                         readonly={!canEditSelfFields}
                         multiline
                         rows={2}
+                        placeholder="最近プライベートで起きたこと"
                         accent={accent}
                       />
                       <Field
@@ -212,23 +214,25 @@ export function OneOnOneSheetPanel({ userId, readonly, commenterMode }: Props) {
                     </div>
                     <div className="mb-3">
                       <Field
-                        label="業務への不安"
+                        label="業務の課題"
                         value={entry.workAnxiety}
                         onChange={(v) => updateEntry(entry.id, { workAnxiety: v })}
                         readonly={!canEditSelfFields}
                         multiline
                         rows={2}
+                        placeholder="現在抱えている業務上の課題・不安"
                         accent={accent}
                       />
                     </div>
                     <div className="mb-3">
                       <Field
-                        label="月の振り返り（結果・成長・タスク）"
+                        label="PDCA（結果・成長・タスク）"
                         value={entry.monthlyReflection}
                         onChange={(v) => updateEntry(entry.id, { monthlyReflection: v })}
                         readonly={!canEditSelfFields}
                         multiline
                         rows={3}
+                        placeholder="今月の Plan / Do / Check / Action — 結果・成長・次のタスク"
                         accent={accent}
                       />
                     </div>

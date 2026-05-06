@@ -110,6 +110,7 @@ export type Database = {
           industry: string | null
           last_contact_at: string | null
           memo: string | null
+          next_appointment_at: string | null
           owner_id: string
           product_names: string[]
           relation_score: number | null
@@ -127,6 +128,7 @@ export type Database = {
           industry?: string | null
           last_contact_at?: string | null
           memo?: string | null
+          next_appointment_at?: string | null
           owner_id: string
           product_names?: string[]
           relation_score?: number | null
@@ -144,6 +146,7 @@ export type Database = {
           industry?: string | null
           last_contact_at?: string | null
           memo?: string | null
+          next_appointment_at?: string | null
           owner_id?: string
           product_names?: string[]
           relation_score?: number | null
@@ -262,11 +265,14 @@ export type Database = {
           amount: number
           commission_amount: number
           customer_id: string | null
+          end_month: number | null
+          end_year: number | null
           id: string
           memo: string | null
           month: number
           owner_id: string
           product_name: string
+          quantity: number
           recorded_at: string
           revenue_type: Database["public"]["Enums"]["revenue_type"]
           year: number
@@ -275,11 +281,14 @@ export type Database = {
           amount: number
           commission_amount?: number
           customer_id?: string | null
+          end_month?: number | null
+          end_year?: number | null
           id?: string
           memo?: string | null
           month: number
           owner_id: string
           product_name: string
+          quantity?: number
           recorded_at?: string
           revenue_type: Database["public"]["Enums"]["revenue_type"]
           year: number
@@ -288,11 +297,14 @@ export type Database = {
           amount?: number
           commission_amount?: number
           customer_id?: string | null
+          end_month?: number | null
+          end_year?: number | null
           id?: string
           memo?: string | null
           month?: number
           owner_id?: string
           product_name?: string
+          quantity?: number
           recorded_at?: string
           revenue_type?: Database["public"]["Enums"]["revenue_type"]
           year?: number
@@ -387,7 +399,7 @@ export type Database = {
       customer_status: "prospect" | "lead" | "existing"
       product_category: "stock" | "shot" | "both" | "other"
       revenue_type: "stock" | "shot"
-      sheet_kind: "vision" | "goal" | "development" | "oneonone"
+      sheet_kind: "daily" | "vision" | "goal" | "development" | "oneonone"
       user_role: "admin" | "manager" | "member"
     }
     CompositeTypes: {
@@ -519,7 +531,7 @@ export const Constants = {
       customer_status: ["prospect", "lead", "existing"],
       product_category: ["stock", "shot", "both", "other"],
       revenue_type: ["stock", "shot"],
-      sheet_kind: ["vision", "goal", "development", "oneonone"],
+      sheet_kind: ["daily", "vision", "goal", "development", "oneonone"],
       user_role: ["admin", "manager", "member"],
     },
   },

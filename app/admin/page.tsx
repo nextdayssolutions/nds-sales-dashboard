@@ -19,8 +19,8 @@ type TabId = "users" | "products" | "analytics" | "audit";
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "users", label: "従業員管理", icon: Users },
   { id: "products", label: "商材管理", icon: Package },
-  { id: "analytics", label: "全社分析", icon: BarChart3 },
-  { id: "audit", label: "監査ログ", icon: Lock },
+  { id: "analytics", label: "準備中", icon: BarChart3 },
+  { id: "audit", label: "準備中", icon: Lock },
 ];
 
 export default function AdminPage() {
@@ -94,7 +94,7 @@ function AdminBody() {
             color: "#00D4FF",
           },
           {
-            label: "合計今月歩合",
+            label: "合計来月支給歩合",
             value:
               agg.totalMonthCommission > 0 ? fmt(agg.totalMonthCommission) : "—",
             sub:
@@ -161,7 +161,7 @@ function AdminBody() {
       {(tab === "analytics" || tab === "audit") && (
         <div className="rounded-3xl border border-white/7 bg-white/[0.03] p-16 text-center text-white/30">
           <div className="mb-3 text-4xl">🚧</div>
-          <div className="text-[13px]">このタブは開発中です</div>
+          <div className="text-[15px] font-bold text-white/60">準備中</div>
         </div>
       )}
 

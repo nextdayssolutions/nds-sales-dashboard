@@ -42,6 +42,8 @@ const config: Config = {
       animation: {
         "fade-up": "fadeUp 0.5s ease both",
         "pulse-soft": "pulseSoft 2s ease-in-out infinite",
+        "rise-glow":
+          "riseGlow 1.6s cubic-bezier(0.22, 1, 0.36, 1) both, floatGlow 6s ease-in-out 1.6s infinite",
       },
       keyframes: {
         fadeUp: {
@@ -51,6 +53,26 @@ const config: Config = {
         pulseSoft: {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.4" },
+        },
+        riseGlow: {
+          "0%": {
+            opacity: "0",
+            transform: "translateY(28px) scale(0.96)",
+            filter: "blur(6px)",
+          },
+          "60%": {
+            opacity: "0.85",
+            filter: "blur(0)",
+          },
+          "100%": {
+            opacity: "1",
+            transform: "translateY(0) scale(1)",
+            filter: "blur(0)",
+          },
+        },
+        floatGlow: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-3px)" },
         },
       },
     },

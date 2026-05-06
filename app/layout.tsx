@@ -18,8 +18,8 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "Sales Dashboard",
-  description: "社内営業ダッシュボード",
+  title: "NDS Sales Dashboard | Next Days Solutions",
+  description: "Next Days Solutions 社内営業ダッシュボード",
 };
 
 export default function RootLayout({

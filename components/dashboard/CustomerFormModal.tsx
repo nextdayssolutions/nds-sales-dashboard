@@ -36,8 +36,19 @@ const empty = (ownerId: string): Omit<Customer, "id"> => ({
   lastContact: new Date().toISOString().slice(0, 10),
   revenue: 0,
   status: "見込み",
+  nextAppointment: "",
   memo: "",
 });
+
+/** YYYY-MM-DD 文字列が「今日 or 未来」かどうか判定。空文字なら false */
+function isFutureOrToday(dateStr: string | undefined): boolean {
+  if (!dateStr) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return false;
+  return target.getTime() >= today.getTime();
+}
 
 export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
   const { addCustomer, updateCustomer, deleteCustomer } = useCustomers();
@@ -206,6 +217,46 @@ export function CustomerFormModal({ open, ownerId, editing, onClose }: Props) {
                 placeholder="0"
                 className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40"
               />
+            </label>
+            <label className="col-span-2 block">
+              <div className="mb-1 flex items-center justify-between">
+                <div className="text-[10px] uppercase tracking-wider text-amber/80">
+                  次回アポ日
+                </div>
+                <div className="text-[10px] text-amber/60">
+                  未来日を入れるとステータスが自動で「商談中」に変わります
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={draft.nextAppointment ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDraft((d) => ({
+                      ...d,
+                      nextAppointment: v,
+                      status:
+                        isFutureOrToday(v) && d.status !== "商談中"
+                          ? "商談中"
+                          : d.status,
+                    }));
+                  }}
+                  className="flex-1 rounded-lg border border-amber/25 bg-amber/[0.04] px-3 py-2 text-[13px] text-white outline-none focus:border-amber/50"
+                />
+                {draft.nextAppointment && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) => ({ ...d, nextAppointment: "" }))
+                    }
+                    className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-2 text-[11px] text-white/60 hover:text-white"
+                    title="次回アポ日をクリア"
+                  >
+                    クリア
+                  </button>
+                )}
+              </div>
             </label>
           </div>
 

@@ -1,13 +1,16 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Plus, Target, Zap, Package, Pencil, X } from "lucide-react";
+import { Plus, Target, Zap, Package, Pencil, X, Repeat } from "lucide-react";
 import type { RevenueType, SalesRecord } from "@/types";
 import { useUser } from "@/lib/user-store";
 import { useSalesRecords, useRevenueTargets } from "@/lib/sales-store";
-import { useCustomers } from "@/lib/customer-store";
 import { useProducts } from "@/lib/products-store";
 import { CURRENT_YEAR } from "@/lib/metrics";
+import {
+  isActiveInMonth,
+  isOpenSubscription,
+} from "@/lib/sales-recurrence";
 import { fmt, fmtFull } from "@/lib/utils";
 import { SalesRecordFormModal } from "./SalesRecordFormModal";
 import { TargetEditModal } from "./TargetEditModal";
@@ -53,7 +56,6 @@ export function RevenuePanel({ userId, readonly }: Props) {
   const { records: allRecords } = useSalesRecords(userId);
   const { records } = useSalesRecords(userId, selectedYear);
   const { targets } = useRevenueTargets(userId, selectedYear);
-  const { customers } = useCustomers(userId);
   const { products } = useProducts();
   const productNames = products.map((p) => p.name);
 
@@ -82,6 +84,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
         byCell[p].shot[m] = 0;
       }
     }
+    // ストック自動継続を unfold しながら集計
     for (const r of records) {
       if (!byCell[r.productName]) {
         byCell[r.productName] = { stock: {}, shot: {} };
@@ -90,8 +93,12 @@ export function RevenuePanel({ userId, readonly }: Props) {
           byCell[r.productName].shot[m] = 0;
         }
       }
-      byCell[r.productName][r.revenueType][r.month] =
-        (byCell[r.productName][r.revenueType][r.month] ?? 0) + r.amount;
+      for (const m of MONTHS) {
+        if (isActiveInMonth(r, selectedYear, m)) {
+          byCell[r.productName][r.revenueType][m] =
+            (byCell[r.productName][r.revenueType][m] ?? 0) + r.amount;
+        }
+      }
     }
     const monthTotals: Record<number, number> = {};
     const productTotals: Record<
@@ -153,14 +160,25 @@ export function RevenuePanel({ userId, readonly }: Props) {
   const remainingMonths = Math.max(1, 12 - currentMonth + 1);
   const pace = Math.round(remaining / remainingMonths);
 
-  // 歩合合計（月次・年次）— スナップショット値を合算
-  const monthCommission = records
-    .filter((r) => r.month === currentMonth)
-    .reduce((s, r) => s + (r.commissionAmount ?? 0), 0);
-  const yearCommission = records.reduce(
-    (s, r) => s + (r.commissionAmount ?? 0),
+  // 歩合合計 — ストックは active な月数 × 月額歩合、shot はそのままの値
+  const monthCommission = records.reduce(
+    (s, r) =>
+      isActiveInMonth(r, selectedYear, currentMonth)
+        ? s + (r.commissionAmount ?? 0)
+        : s,
     0,
   );
+  const yearCommission = records.reduce((s, r) => {
+    const c = r.commissionAmount ?? 0;
+    if (r.revenueType === "shot") {
+      return r.year === selectedYear ? s + c : s;
+    }
+    let activeMonths = 0;
+    for (const m of MONTHS) {
+      if (isActiveInMonth(r, selectedYear, m)) activeMonths++;
+    }
+    return s + activeMonths * c;
+  }, 0);
 
   const openNew = () => {
     setEditing(null);
@@ -191,17 +209,15 @@ export function RevenuePanel({ userId, readonly }: Props) {
     setFormOpen(true);
   };
 
+  // セル詳細: その月にアクティブな全レコード（ストック自動継続を含む）を表示
   const cellRecords = selectedCell
     ? records.filter(
         (r) =>
           r.productName === selectedCell.productName &&
           r.revenueType === selectedCell.revenueType &&
-          r.month === selectedCell.month
+          isActiveInMonth(r, selectedYear, selectedCell.month),
       )
     : [];
-
-  const customerName = (id?: string) =>
-    id ? customers.find((c) => c.id === id)?.name ?? "—" : "—";
 
   return (
     <div>
@@ -231,20 +247,18 @@ export function RevenuePanel({ userId, readonly }: Props) {
             </div>
           </div>
           <div className="flex gap-2">
-            {availableYears.length > 1 && (
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-white outline-none focus:border-cyan/40"
-                title="年を切り替えて過去実績を閲覧"
-              >
-                {availableYears.map((y) => (
-                  <option key={y} value={y} className="bg-bg-panel">
-                    {y}年
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-[12px] font-bold text-white outline-none focus:border-cyan/40"
+              title="年を切り替えて過去実績を閲覧"
+            >
+              {availableYears.map((y) => (
+                <option key={y} value={y} className="bg-bg-panel">
+                  {y}年
+                </option>
+              ))}
+            </select>
             {!readonly && isCurrentYear && (
               <>
                 <button
@@ -327,7 +341,7 @@ export function RevenuePanel({ userId, readonly }: Props) {
             }}
           >
             <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-mint/90">
-              💰 {isCurrentYear ? "今月の歩合" : `${selectedYear}年 ${currentMonth}月の歩合`}
+              💰 {isCurrentYear ? "来月の支給歩合（今月分）" : `${selectedYear}年 ${currentMonth}月分の支給歩合`}
             </div>
             <div className="text-[18px] font-extrabold text-mint">
               {fmtFull(monthCommission)}
@@ -624,19 +638,46 @@ export function RevenuePanel({ userId, readonly }: Props) {
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              {cellRecords.map((r) => (
+              {cellRecords.map((r) => {
+                const isStock = r.revenueType === "stock";
+                const isOpen = isOpenSubscription(r);
+                const startedAt = `${r.year}/${r.month}`;
+                const endedAt =
+                  r.endYear != null && r.endMonth != null
+                    ? `${r.endYear}/${r.endMonth}`
+                    : null;
+                return (
                 <div
                   key={r.id}
                   className="flex items-center gap-3 rounded-lg border border-white/7 bg-white/[0.02] px-3 py-2"
                 >
                   <div className="flex-1">
-                    <div className="text-[12px] font-semibold text-white">
-                      {fmtFull(r.amount)}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] font-semibold text-white">
+                        {fmtFull(r.amount)}
+                      </span>
+                      {r.quantity > 1 && (
+                        <span className="text-[10px] text-white/45">
+                          × {r.quantity}個
+                        </span>
+                      )}
+                      {isStock && isOpen && (
+                        <span className="flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-1.5 py-0.5 text-[9px] font-bold text-mint">
+                          <Repeat size={9} />
+                          継続中（{startedAt}〜）
+                        </span>
+                      )}
+                      {isStock && !isOpen && endedAt && (
+                        <span className="rounded-full border border-coral/30 bg-coral/10 px-1.5 py-0.5 text-[9px] font-bold text-coral">
+                          {startedAt}〜{endedAt}
+                        </span>
+                      )}
                     </div>
-                    <div className="mt-0.5 text-[10px] text-white/40">
-                      {customerName(r.customerId)}
-                      {r.memo && ` · ${r.memo}`}
-                    </div>
+                    {r.memo && (
+                      <div className="mt-0.5 text-[10px] text-white/40">
+                        {r.memo}
+                      </div>
+                    )}
                   </div>
                   {!readonly && (
                     <button
@@ -648,7 +689,8 @@ export function RevenuePanel({ userId, readonly }: Props) {
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

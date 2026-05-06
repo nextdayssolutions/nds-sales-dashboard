@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SheetKind, SheetSet } from "@/types";
 import {
+  emptyDaily,
   emptyDevelopment,
   emptyGoal,
   emptyOneOnOne,
@@ -12,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 
 function defaults(): SheetSet {
   return {
+    daily: emptyDaily(),
     vision: emptyVision(),
     goal: emptyGoal(),
     development: emptyDevelopment(),

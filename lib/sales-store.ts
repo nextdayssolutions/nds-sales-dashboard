@@ -13,9 +13,12 @@ interface SalesRecordRow {
   product_name: string;
   revenue_type: RevenueType;
   amount: number;
+  quantity: number;
   commission_amount: number;
   year: number;
   month: number;
+  end_year: number | null;
+  end_month: number | null;
   memo: string | null;
   recorded_at: string;
 }
@@ -28,9 +31,12 @@ function rowToRecord(row: SalesRecordRow): SalesRecord {
     productName: row.product_name,
     revenueType: row.revenue_type,
     amount: row.amount,
+    quantity: row.quantity ?? 1,
     commissionAmount: row.commission_amount ?? 0,
     year: row.year,
     month: row.month,
+    endYear: row.end_year ?? undefined,
+    endMonth: row.end_month ?? undefined,
     memo: row.memo ?? undefined,
     recordedAt: row.recorded_at,
   };
@@ -43,9 +49,12 @@ function recordToInsert(r: Omit<SalesRecord, "id" | "recordedAt">) {
     product_name: r.productName,
     revenue_type: r.revenueType,
     amount: r.amount,
+    quantity: r.quantity ?? 1,
     commission_amount: r.commissionAmount ?? 0,
     year: r.year,
     month: r.month,
+    end_year: r.endYear ?? null,
+    end_month: r.endMonth ?? null,
     memo: r.memo ?? null,
   };
 }
@@ -57,10 +66,13 @@ function recordToUpdate(patch: Partial<SalesRecord>) {
   if (patch.productName !== undefined) out.product_name = patch.productName;
   if (patch.revenueType !== undefined) out.revenue_type = patch.revenueType;
   if (patch.amount !== undefined) out.amount = patch.amount;
+  if (patch.quantity !== undefined) out.quantity = patch.quantity;
   if (patch.commissionAmount !== undefined)
     out.commission_amount = patch.commissionAmount;
   if (patch.year !== undefined) out.year = patch.year;
   if (patch.month !== undefined) out.month = patch.month;
+  if (patch.endYear !== undefined) out.end_year = patch.endYear ?? null;
+  if (patch.endMonth !== undefined) out.end_month = patch.endMonth ?? null;
   if (patch.memo !== undefined) out.memo = patch.memo ?? null;
   return out;
 }
@@ -79,7 +91,7 @@ async function fetchRecords(): Promise<SalesRecord[]> {
   const { data, error } = await supabase
     .from("sales_records")
     .select(
-      "id, owner_id, customer_id, product_name, revenue_type, amount, commission_amount, year, month, memo, recorded_at",
+      "id, owner_id, customer_id, product_name, revenue_type, amount, quantity, commission_amount, year, month, end_year, end_month, memo, recorded_at",
     )
     .order("recorded_at", { ascending: false });
   if (error) {
@@ -110,8 +122,12 @@ export function useSalesRecords(ownerId?: string, year?: number) {
   const records = useMemo(() => {
     return all.filter((r) => {
       if (ownerId !== undefined && r.ownerId !== ownerId) return false;
-      if (year !== undefined && r.year !== year) return false;
-      return true;
+      if (year === undefined) return true;
+      // shot は単月、stock は year までに開始 & (継続中 OR 解約年 >= year)
+      if (r.revenueType === "shot") return r.year === year;
+      if (r.year > year) return false;
+      if (r.endYear == null) return true;
+      return r.endYear >= year;
     });
   }, [all, ownerId, year]);
 
@@ -122,7 +138,7 @@ export function useSalesRecords(ownerId?: string, year?: number) {
         .from("sales_records")
         .insert(recordToInsert(data))
         .select(
-          "id, owner_id, customer_id, product_name, revenue_type, amount, commission_amount, year, month, memo, recorded_at",
+          "id, owner_id, customer_id, product_name, revenue_type, amount, quantity, commission_amount, year, month, end_year, end_month, memo, recorded_at",
         )
         .single();
       if (error) {
