@@ -116,13 +116,16 @@ export function DailySheetPanel({ userId, readonly, commenterMode }: Props) {
   // マネージャーコメントは manager/admin（commenterMode）のみ編集可。本人は閲覧のみ。
   const canEditComment = !!commenterMode;
 
-  /** 指定日付のエントリを取得 or 新規作成しつつ draft に追加 */
-  const ensureEntry = (date: string): DailyEntry => {
-    const existing = draft.entries.find((e) => e.date === date);
-    if (existing) return existing;
-    const fresh = emptyEntry(date);
-    setDraft((d) => ({ entries: [fresh, ...d.entries] }));
-    return fresh;
+  /**
+   * 指定日付のエントリを ensure（無ければ作る）。
+   * 重複作成を防ぐため、find と setState を 1 つの functional updater 内で完結させる。
+   * これにより React Strict Mode の useEffect 2 回起動でも安全。
+   */
+  const ensureEntry = (date: string) => {
+    setDraft((d) => {
+      if (d.entries.some((e) => e.date === date)) return d;
+      return { entries: [emptyEntry(date), ...d.entries] };
+    });
   };
 
   const updateEntryByDate = (date: string, patch: Partial<DailyEntry>) => {
@@ -470,7 +473,7 @@ interface FormProps {
   date: string;
   entry: DailyEntry | undefined;
   accent: string;
-  ensureEntry: (date: string) => DailyEntry;
+  ensureEntry: (date: string) => void;
   updateEntry: (date: string, patch: Partial<DailyEntry>) => void;
   canEditSelf: boolean;
   canEditComment: boolean;
