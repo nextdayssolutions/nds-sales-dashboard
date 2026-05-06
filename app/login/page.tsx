@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { createClient } from "@/lib/supabase/client";
+import { isDevTestEmail } from "@/lib/dev-users";
 import type { UserRole } from "@/types";
 
 // ─── DEV ONLY: ロール別クイックログイン ─────────────────────
@@ -69,11 +70,20 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const performSignIn = async (rawEmail: string, rawPassword: string) => {
+    const normalizedEmail = rawEmail.trim().toLowerCase();
+    // 本番ビルドでは @nds.test の dev テストアカウントによるログインを拒否
+    if (
+      process.env.NODE_ENV === "production" &&
+      isDevTestEmail(normalizedEmail)
+    ) {
+      toast.error("テストアカウントは本番環境では利用できません");
+      return;
+    }
     setSubmitting(true);
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: rawEmail.trim().toLowerCase(),
+        email: normalizedEmail,
         password: rawPassword,
       });
       if (error || !data.user) {

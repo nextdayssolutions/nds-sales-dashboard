@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { UserRecord, UserRole, UserStatus } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+import { isDevTestEmail, shouldHideDevTestUsers } from "@/lib/dev-users";
 
 interface UserProfileRow {
   id: string;
@@ -56,7 +57,12 @@ async function fetchAll(): Promise<UserRecord[]> {
   return (data ?? []).map((r) => rowToRecord(r as UserProfileRow));
 }
 
-/** 全ユーザーを取得。admin ページ用 */
+/** 全ユーザーを取得。admin ページ用
+ *
+ *  本番ビルド時は @nds.test の dev テストユーザーを除外（クイックログイン用に
+ *  作成したテストアカウントが本番管理画面に出ないようにする）。
+ *  ローカル dev 時は全て見える。
+ */
 export function useAllUsers() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -74,7 +80,12 @@ export function useAllUsers() {
     return () => window.removeEventListener(USERS_EVENT, handler);
   }, [reload]);
 
-  return { users, loaded, reload };
+  const visibleUsers = useMemo(() => {
+    if (!shouldHideDevTestUsers()) return users;
+    return users.filter((u) => !isDevTestEmail(u.email));
+  }, [users]);
+
+  return { users: visibleUsers, loaded, reload };
 }
 
 /** 指定マネージャー配下のユーザー */
