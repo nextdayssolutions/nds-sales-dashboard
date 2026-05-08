@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   X,
   User,
@@ -10,6 +10,8 @@ import {
   BookOpen,
   KeyRound,
   Trash2,
+  Pencil,
+  Save,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,10 +21,17 @@ import { SchedulePanel } from "@/components/dashboard/SchedulePanel";
 import { RevenuePanel } from "@/components/dashboard/RevenuePanel";
 import { SheetPanel } from "@/components/sheets/SheetPanel";
 import { fmt, fmtFull } from "@/lib/utils";
-import { useUser, broadcastUsersUpdated } from "@/lib/user-store";
+import {
+  useAllUsers,
+  useUser,
+  broadcastUsersUpdated,
+} from "@/lib/user-store";
 import { useUserMetrics } from "@/lib/metrics";
 import { useAuthedUser } from "@/lib/session";
-import { deleteEmployeeAction } from "@/app/actions/users";
+import {
+  deleteEmployeeAction,
+  updateEmployeeAction,
+} from "@/app/actions/users";
 import { ResetPasswordModal } from "./ResetPasswordModal";
 import { ModalPortal } from "@/components/common/ModalPortal";
 
@@ -57,28 +66,93 @@ export function UserDetailModal({ target, onClose }: Props) {
   const [deleteConfirmName, setDeleteConfirmName] = useState<string>("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [formName, setFormName] = useState("");
+  const [formDept, setFormDept] = useState("");
+  const [formTitle, setFormTitle] = useState("");
+  const [formRole, setFormRole] = useState<UserRole>("member");
+  const [formManagerId, setFormManagerId] = useState<string>("");
+  const [saving, setSaving] = useState(false);
   const metrics = useUserMetrics(target?.id);
-  const manager = useUser(target?.managerId);
+  // 最新の target を user-store から取得（保存後の表示更新用）
+  const liveTarget = useUser(target?.id) ?? target;
+  const manager = useUser(liveTarget?.managerId);
+  const { users: allUsers } = useAllUsers();
   const { session } = useAuthedUser();
-  if (!target) return null;
 
-  const isSelf = session?.userId === target.id;
-  const canDelete = !isSelf && target.role !== "admin";
+  // 別ユーザーに切り替わったら編集モードを抜ける
+  useEffect(() => {
+    setEditing(false);
+  }, [target?.id]);
+
+  if (!target || !liveTarget) return null;
+
+  const isSelf = session?.userId === liveTarget.id;
+  const canDelete = !isSelf && liveTarget.role !== "admin";
+
+  const managerCandidates = allUsers.filter(
+    (u) =>
+      (u.role === "manager" || u.role === "admin") && u.id !== liveTarget.id,
+  );
+
+  const startEdit = () => {
+    setFormName(liveTarget.name);
+    setFormDept(liveTarget.dept);
+    setFormTitle(liveTarget.title ?? "");
+    setFormRole(liveTarget.role);
+    setFormManagerId(liveTarget.managerId ?? "");
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+  };
+
+  const onSave = async () => {
+    if (!formName.trim()) {
+      toast.error("氏名を入力してください");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await updateEmployeeAction({
+        userId: liveTarget.id,
+        fullName: formName.trim(),
+        department: formDept.trim(),
+        title: formTitle.trim(),
+        // 自分自身のロール変更は禁止（降格して操作不能になるのを防止）
+        role: isSelf ? undefined : formRole,
+        managerId: formManagerId || null,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "更新に失敗しました");
+        setSaving(false);
+        return;
+      }
+      toast.success("基本情報を更新しました");
+      broadcastUsersUpdated();
+      setEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "更新中にエラーが発生しました");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const onConfirmDelete = async () => {
-    if (deleteConfirmName.trim() !== target.name.trim()) {
+    if (deleteConfirmName.trim() !== liveTarget.name.trim()) {
       toast.error("氏名が一致しません");
       return;
     }
     setDeleting(true);
     try {
-      const res = await deleteEmployeeAction(target.id);
+      const res = await deleteEmployeeAction(liveTarget.id);
       if (!res.ok) {
         toast.error(res.error ?? "削除に失敗しました");
         setDeleting(false);
         return;
       }
-      toast.success(`「${target.name}」を削除しました`);
+      toast.success(`「${liveTarget.name}」を削除しました`);
       broadcastUsersUpdated();
       setDeleteConfirmOpen(false);
       setDeleteConfirmName("");
@@ -105,31 +179,31 @@ export function UserDetailModal({ target, onClose }: Props) {
             <div
               className="flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold"
               style={{
-                background: `${roleColor[target.role]}15`,
-                color: roleColor[target.role],
-                border: `1px solid ${roleColor[target.role]}30`,
+                background: `${roleColor[liveTarget.role]}15`,
+                color: roleColor[liveTarget.role],
+                border: `1px solid ${roleColor[liveTarget.role]}30`,
               }}
             >
-              {target.name.charAt(0)}
+              {liveTarget.name.charAt(0)}
             </div>
             <div>
               <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-coral/70">
-                Admin View — 閲覧・教育担当コメントのみ編集可
+                Admin View — 基本情報・ロール編集可
               </div>
               <div className="flex items-center gap-2">
-                <div className="text-[17px] font-bold text-white">{target.name}</div>
+                <div className="text-[17px] font-bold text-white">{liveTarget.name}</div>
                 <span
                   className="rounded-full px-2 py-0.5 text-[10px] font-bold"
                   style={{
-                    background: `${roleColor[target.role]}15`,
-                    color: roleColor[target.role],
+                    background: `${roleColor[liveTarget.role]}15`,
+                    color: roleColor[liveTarget.role],
                   }}
                 >
-                  {roleLabel[target.role]}
+                  {roleLabel[liveTarget.role]}
                 </span>
               </div>
               <div className="mt-0.5 text-[11px] text-white/40">
-                {target.email}
+                {liveTarget.email}
               </div>
             </div>
           </div>
@@ -173,7 +247,7 @@ export function UserDetailModal({ target, onClose }: Props) {
             <>
               <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  {canDelete && (
+                  {canDelete && !editing && (
                     <button
                       onClick={() => setDeleteConfirmOpen(true)}
                       className="flex items-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-1.5 text-[12px] font-bold text-red-400 hover:bg-red-500/15"
@@ -184,98 +258,200 @@ export function UserDetailModal({ target, onClose }: Props) {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPwReset(true)}
-                    className="flex items-center gap-1.5 rounded-xl border border-coral/30 bg-coral/10 px-3.5 py-1.5 text-[12px] font-bold text-coral hover:bg-coral/15"
-                  >
-                    <KeyRound size={13} />
-                    パスワードをリセット
-                  </button>
+                  {editing ? (
+                    <>
+                      <button
+                        onClick={cancelEdit}
+                        disabled={saving}
+                        className="rounded-xl border border-white/15 px-3.5 py-1.5 text-[12px] text-white/70 hover:bg-white/[0.05] disabled:opacity-50"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        onClick={onSave}
+                        disabled={saving}
+                        className="flex items-center gap-1.5 rounded-xl border border-cyan/30 bg-cyan/10 px-3.5 py-1.5 text-[12px] font-bold text-cyan hover:bg-cyan/15 disabled:opacity-50"
+                      >
+                        <Save size={13} />
+                        {saving ? "保存中..." : "保存"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={startEdit}
+                        className="flex items-center gap-1.5 rounded-xl border border-cyan/30 bg-cyan/10 px-3.5 py-1.5 text-[12px] font-bold text-cyan hover:bg-cyan/15"
+                      >
+                        <Pencil size={13} />
+                        編集
+                      </button>
+                      <button
+                        onClick={() => setPwReset(true)}
+                        className="flex items-center gap-1.5 rounded-xl border border-coral/30 bg-coral/10 px-3.5 py-1.5 text-[12px] font-bold text-coral hover:bg-coral/15"
+                      >
+                        <KeyRound size={13} />
+                        パスワードをリセット
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              {[
-                { label: "氏名", value: target.name },
-                { label: "メール", value: target.email },
-                {
-                  label: "ロール",
-                  value: roleLabel[target.role],
-                  color: roleColor[target.role],
-                },
-                { label: "部署", value: target.dept },
-                { label: "役職", value: target.title ?? "—" },
-                { label: "マネージャー", value: manager ? manager.name : "—" },
-                { label: "最終ログイン", value: target.lastLogin },
-                {
-                  label: "担当顧客",
-                  value:
-                    metrics.customerCount > 0
-                      ? `${metrics.customerCount}社`
-                      : "—",
-                },
-                {
-                  label: "今月売上",
-                  value:
-                    metrics.monthRevenue > 0 ? fmt(metrics.monthRevenue) : "—",
-                },
-                {
-                  label: "今月達成率",
-                  value:
-                    metrics.monthAchievement !== null
-                      ? `${metrics.monthAchievement}%`
-                      : "—",
-                },
-                {
-                  label: "年間累計",
-                  value:
-                    metrics.yearRevenue > 0
-                      ? fmtFull(metrics.yearRevenue)
-                      : "—",
-                },
-                {
-                  label: "年間達成率",
-                  value:
-                    metrics.yearAchievement !== null
-                      ? `${metrics.yearAchievement}%`
-                      : "—",
-                },
-                {
-                  label: "育成計画進捗",
-                  value: `${metrics.trainingProgress}% (${metrics.trainingDone}/${metrics.trainingTotal})`,
-                },
-              ].map((f) => (
-                <div
-                  key={f.label}
-                  className="rounded-xl border border-white/7 bg-white/[0.03] px-4 py-3"
-                >
-                  <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
-                    {f.label}
-                  </div>
-                  <div
-                    className="text-[13px] font-semibold"
-                    style={{ color: f.color ?? "#fff" }}
+
+              {editing ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <FieldEdit label="氏名 *">
+                    <input
+                      type="text"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      disabled={saving}
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40 disabled:opacity-50"
+                    />
+                  </FieldEdit>
+                  <FieldEdit label="メール（変更不可）">
+                    <div className="px-3 py-2 text-[13px] text-white/45">
+                      {liveTarget.email}
+                    </div>
+                  </FieldEdit>
+                  <FieldEdit label="部署">
+                    <input
+                      type="text"
+                      value={formDept}
+                      onChange={(e) => setFormDept(e.target.value)}
+                      disabled={saving}
+                      placeholder="営業1部"
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40 disabled:opacity-50"
+                    />
+                  </FieldEdit>
+                  <FieldEdit label="役職">
+                    <input
+                      type="text"
+                      value={formTitle}
+                      onChange={(e) => setFormTitle(e.target.value)}
+                      disabled={saving}
+                      placeholder="セールスエンジニア"
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40 disabled:opacity-50"
+                    />
+                  </FieldEdit>
+                  <FieldEdit
+                    label={
+                      isSelf
+                        ? "ロール（自分自身は変更不可）"
+                        : "ロール"
+                    }
                   >
-                    {f.value}
-                  </div>
+                    <select
+                      value={formRole}
+                      onChange={(e) => setFormRole(e.target.value as UserRole)}
+                      disabled={saving || isSelf}
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40 disabled:opacity-50"
+                    >
+                      <option value="member" className="bg-bg-panel">従業員</option>
+                      <option value="manager" className="bg-bg-panel">マネージャー</option>
+                      <option value="admin" className="bg-bg-panel">管理者</option>
+                    </select>
+                  </FieldEdit>
+                  <FieldEdit label="マネージャー（上司）">
+                    <select
+                      value={formManagerId}
+                      onChange={(e) => setFormManagerId(e.target.value)}
+                      disabled={saving}
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-[13px] text-white outline-none focus:border-cyan/40 disabled:opacity-50"
+                    >
+                      <option value="" className="bg-bg-panel">— 未設定 —</option>
+                      {managerCandidates.map((m) => (
+                        <option key={m.id} value={m.id} className="bg-bg-panel">
+                          {m.name}（{roleLabel[m.role]}）
+                        </option>
+                      ))}
+                    </select>
+                  </FieldEdit>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[
+                    { label: "氏名", value: liveTarget.name },
+                    { label: "メール", value: liveTarget.email },
+                    {
+                      label: "ロール",
+                      value: roleLabel[liveTarget.role],
+                      color: roleColor[liveTarget.role],
+                    },
+                    { label: "部署", value: liveTarget.dept || "—" },
+                    { label: "役職", value: liveTarget.title ?? "—" },
+                    { label: "マネージャー", value: manager ? manager.name : "—" },
+                    { label: "最終ログイン", value: liveTarget.lastLogin },
+                    {
+                      label: "担当顧客",
+                      value:
+                        metrics.customerCount > 0
+                          ? `${metrics.customerCount}社`
+                          : "—",
+                    },
+                    {
+                      label: "今月売上",
+                      value:
+                        metrics.monthRevenue > 0 ? fmt(metrics.monthRevenue) : "—",
+                    },
+                    {
+                      label: "今月達成率",
+                      value:
+                        metrics.monthAchievement !== null
+                          ? `${metrics.monthAchievement}%`
+                          : "—",
+                    },
+                    {
+                      label: "年間累計",
+                      value:
+                        metrics.yearRevenue > 0
+                          ? fmtFull(metrics.yearRevenue)
+                          : "—",
+                    },
+                    {
+                      label: "年間達成率",
+                      value:
+                        metrics.yearAchievement !== null
+                          ? `${metrics.yearAchievement}%`
+                          : "—",
+                    },
+                    {
+                      label: "育成計画進捗",
+                      value: `${metrics.trainingProgress}% (${metrics.trainingDone}/${metrics.trainingTotal})`,
+                    },
+                  ].map((f) => (
+                    <div
+                      key={f.label}
+                      className="rounded-xl border border-white/7 bg-white/[0.03] px-4 py-3"
+                    >
+                      <div className="mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                        {f.label}
+                      </div>
+                      <div
+                        className="text-[13px] font-semibold"
+                        style={{ color: f.color ?? "#fff" }}
+                      >
+                        {f.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
-          {tab === "crm" && <CRMPanel userId={target.id} readonly />}
-          {tab === "schedule" && <SchedulePanel userId={target.id} />}
-          {tab === "revenue" && <RevenuePanel userId={target.id} />}
+          {tab === "crm" && <CRMPanel userId={liveTarget.id} readonly />}
+          {tab === "schedule" && <SchedulePanel userId={liveTarget.id} />}
+          {tab === "revenue" && <RevenuePanel userId={liveTarget.id} />}
           {tab === "sheets" && (
-            <SheetPanel userId={target.id} readonly trainerMode />
+            <SheetPanel userId={liveTarget.id} readonly trainerMode />
           )}
         </div>
       </div>
 
       <ResetPasswordModal
         open={pwReset}
-        userId={target.id}
-        userName={target.name}
+        userId={liveTarget.id}
+        userName={liveTarget.name}
         onClose={() => setPwReset(false)}
       />
 
@@ -325,24 +501,24 @@ export function UserDetailModal({ target, onClose }: Props) {
 
               <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-[12px]">
                 <div className="text-white/45">対象</div>
-                <div className="mt-1 text-[14px] font-bold text-white">{target.name}</div>
-                <div className="text-[11px] text-white/45">{target.email}</div>
+                <div className="mt-1 text-[14px] font-bold text-white">{liveTarget.name}</div>
+                <div className="text-[11px] text-white/45">{liveTarget.email}</div>
                 <div className="mt-1.5 text-[10px] text-white/45">
-                  ロール: {roleLabel[target.role]} / 部署: {target.dept || "—"}
+                  ロール: {roleLabel[liveTarget.role]} / 部署: {liveTarget.dept || "—"}
                 </div>
               </div>
 
               <label className="block">
                 <div className="mb-1.5 text-[11px] text-white/65">
                   確認のため、対象者の氏名を入力してください:{" "}
-                  <span className="font-bold text-red-400">{target.name}</span>
+                  <span className="font-bold text-red-400">{liveTarget.name}</span>
                 </div>
                 <input
                   type="text"
                   value={deleteConfirmName}
                   onChange={(e) => setDeleteConfirmName(e.target.value)}
                   disabled={deleting}
-                  placeholder={target.name}
+                  placeholder={liveTarget.name}
                   className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-red-500/50 disabled:opacity-50"
                   autoFocus
                 />
@@ -361,7 +537,7 @@ export function UserDetailModal({ target, onClose }: Props) {
               <button
                 type="button"
                 disabled={
-                  deleting || deleteConfirmName.trim() !== target.name.trim()
+                  deleting || deleteConfirmName.trim() !== liveTarget.name.trim()
                 }
                 onClick={onConfirmDelete}
                 className="flex items-center gap-1.5 rounded-xl bg-red-500 px-5 py-2 text-[12px] font-bold text-white shadow-[0_4px_16px_rgba(239,68,68,0.4)] transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-500/40 disabled:shadow-none"
@@ -375,5 +551,22 @@ export function UserDetailModal({ target, onClose }: Props) {
       )}
     </div>
     </ModalPortal>
+  );
+}
+
+function FieldEdit({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-white/7 bg-white/[0.03] px-4 py-3">
+      <div className="mb-1.5 text-[10px] uppercase tracking-wider text-white/40">
+        {label}
+      </div>
+      {children}
+    </div>
   );
 }

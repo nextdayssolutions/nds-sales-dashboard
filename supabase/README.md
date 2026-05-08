@@ -18,6 +18,7 @@
 | 0009 | `0009_sales_quantity_and_recurrence.sql` | `sales_records.quantity` + `end_year/end_month`。ストック自動継続。既存 stock は `end = start` で backfill |
 | 0010 | `0010_user_delete_cascades.sql` | 従業員削除時の FK 整備（customers/sales: CASCADE / audit_logs/users.manager_id: SET NULL）|
 | 0011 | `0011_personal_sheets_supervisor_full_access.sql` | personal_sheets の supervisor RLS を UPDATE 専用 → ALL に拡張（admin/manager がシート未保存ユーザーにも初回 INSERT できるよう）|
+| 0012 | `0012_fix_users_self_update_recursion.sql` | `users_self_update` の WITH CHECK のサブクエリ参照で `infinite recursion detected in policy` が発生していた問題を修正。`current_user_role()` 関数 (SECURITY DEFINER + BYPASSRLS) に置換 |
 
 新規プロジェクトを作成する時は **必ず番号順** で実行してください。詳細手順は [`docs/SETUP.md`](../docs/SETUP.md#2-supabase-プロジェクト構築) を参照。
 
