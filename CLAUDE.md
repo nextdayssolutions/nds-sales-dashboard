@@ -22,6 +22,7 @@
 | [README.md](./README.md) | プロジェクト入り口（5 分で起動）|
 | [docs/SETUP.md](./docs/SETUP.md) | Supabase / Google Cloud / Vercel の構築手順 |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | データフロー・RLS・主要パターン |
+| [docs/LOCAL_DEV.md](./docs/LOCAL_DEV.md) | Docker でローカル Supabase に切り替えて動かす手順 |
 | [supabase/README.md](./supabase/README.md) | DB スキーマ・マイグレーション一覧 |
 | docs/01〜05（数字始まり） | 当初設計資料（**編集禁止**、参考情報） |
 
@@ -43,7 +44,8 @@ npm run lint   # ESLint
 npx tsc --noEmit  # 型チェックのみ（コミット前必須）
 ```
 
-ローカル開発も**本番と同じ Supabase DB に繋ぎます**（社内利用想定で環境分離なし）。
+ローカル開発もデフォルトでは**本番と同じ Supabase DB に繋ぎます**（社内利用想定で環境分離なし）。
+スキーマ実験など分離して試したい時は Docker で立ち上げたローカル Supabase に切替可能 → [docs/LOCAL_DEV.md](./docs/LOCAL_DEV.md)（`npm run db:start` / `db:reset` / `db:seed:dev`）。
 
 ---
 
